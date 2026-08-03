@@ -1,0 +1,23 @@
+{
+    "name": "multilang/multilang",
+    "description": "Reusable multi-language string storage: retrieveData, insertData, dbConnector",
+    "license": "GPL-3.0-or-later",
+    "type": "library",
+    "require": {
+        "php": ">=8.0",
+        "ext-pdo": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "Multilang\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Multilang\\Tests\\": "tests/"
+        }
+    }
+}

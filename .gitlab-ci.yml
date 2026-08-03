@@ -1,0 +1,158 @@
+# Two stages, two different costs -- both satisfy "tests always run in
+# disposable containers" (see AGENTS.md), just via two different
+# mechanisms:
+#
+#   unit-test    — one job per language, SQLite/filesystem only. Each
+#                  job's `image:` *is* its disposable container: GitLab
+#                  provisions it fresh, runs the job, and destroys it --
+#                  no test here ever touches a persistent host. That
+#                  already satisfies the policy without nested
+#                  Docker-in-Docker, which is why this tier doesn't call
+#                  conformance/run-unit-tests.sh the way local `make
+#                  test` does (that script exists for the case that has
+#                  no such guarantee otherwise: a contributor's own
+#                  machine). Runs on every push and MR. Fast, cheap.
+#
+#   conformance  — one job per language, each with its own isolated
+#                  Docker-in-Docker service, calling the existing
+#                  conformance/run-live-db-tests.sh for that language
+#                  against real Postgres + MySQL containers -- this tier
+#                  needs actual nested containers since it's standing up
+#                  disposable database containers, not just running in
+#                  one. Slower and more expensive (multiple image builds
+#                  per job), so it's gated to merge requests, the default
+#                  branch, and scheduled pipelines rather than every push
+#                  — see the `rules:` block below if you want to change
+#                  that.
+#
+# All versions are CI/CD variables, never hardcoded, so this pipeline can
+# be re-run against different language/database versions from the
+# GitLab UI (Run pipeline -> variables) without editing this file.
+
+stages:
+  - unit-test
+  - conformance
+
+variables:
+  POSTGRES_VERSION: "16"
+  MYSQL_VERSION: "8.0"
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+  PHP_VERSION: "8.2"
+  GO_VERSION: "1.23"
+  DEBIAN_VERSION: "bookworm"
+
+.conformance_rules: &conformance_rules
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# --- unit-test stage: SQLite/filesystem, no live DB, no nested containers ---
+
+python-unit:
+  stage: unit-test
+  image: python:${PYTHON_VERSION}-slim
+  before_script:
+    - cd python
+    - pip install --no-cache-dir -e ".[dev,postgres,mysql]"
+  script:
+    - pytest tests/ -v
+
+javascript-unit:
+  stage: unit-test
+  image: node:${NODE_VERSION}-slim
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
+    - cd javascript
+    - npm install
+  script:
+    - npm test
+
+php-unit:
+  stage: unit-test
+  image: php:${PHP_VERSION}-cli
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends libpq-dev default-libmysqlclient-dev libsqlite3-dev unzip git && rm -rf /var/lib/apt/lists/*
+    - docker-php-ext-install pdo_mysql pdo_pgsql pdo_sqlite
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/bin --filename=composer
+    - cd php
+    - composer install --no-interaction --prefer-dist
+  script:
+    - vendor/bin/phpunit
+
+go-unit:
+  stage: unit-test
+  image: golang:${GO_VERSION}
+  variables:
+    GOFLAGS: -p=1 # see go/Dockerfile.conformance: caps compilation parallelism to avoid OOM on constrained runners
+  before_script:
+    - cd go
+    - go mod download
+  script:
+    - go test ./... -v
+
+# go.mod's module path is a fixed fetch address (see
+# scripts/set-go-module-path.sh) -- it can't self-update, so this job
+# just catches the case where the repo moved/was renamed and nobody ran
+# the script. Cheap: no Go toolchain needed, just reads a file.
+check-go-module-path:
+  stage: unit-test
+  image: alpine:3
+  script:
+    - EXPECTED="${CI_SERVER_HOST}/${CI_PROJECT_PATH}/go"
+    - ACTUAL="$(awk '/^module /{print $2}' go/go.mod)"
+    - |
+      if [ "$ACTUAL" != "$EXPECTED" ]; then
+        echo "go/go.mod module path is '${ACTUAL}', expected '${EXPECTED}' for this project's remote."
+        echo "Fix: ./scripts/set-go-module-path.sh"
+        exit 1
+      fi
+
+c-unit:
+  stage: unit-test
+  image: debian:${DEBIAN_VERSION}
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config libsqlite3-dev libpq-dev default-libmysqlclient-dev libssl-dev && rm -rf /var/lib/apt/lists/*
+    - cd c
+  script:
+    - make test
+
+# --- conformance stage: real Postgres/MySQL, one Docker-in-Docker job per language ---
+
+.conformance_job: &conformance_job
+  stage: conformance
+  image: docker:24
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_VERIFY: 1
+    DOCKER_CERT_PATH: "/certs/client"
+  <<: *conformance_rules
+
+conformance-python:
+  <<: *conformance_job
+  script:
+    - ./conformance/run-live-db-tests.sh python
+
+conformance-javascript:
+  <<: *conformance_job
+  script:
+    - ./conformance/run-live-db-tests.sh javascript
+
+conformance-php:
+  <<: *conformance_job
+  script:
+    - ./conformance/run-live-db-tests.sh php
+
+conformance-go:
+  <<: *conformance_job
+  script:
+    - ./conformance/run-live-db-tests.sh go
+
+conformance-c:
+  <<: *conformance_job
+  script:
+    - ./conformance/run-live-db-tests.sh c

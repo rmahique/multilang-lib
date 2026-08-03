@@ -1,0 +1,39 @@
+# Optional convenience for local development with `docker compose` /
+# `podman compose`. The canonical, CI-reusable way to run the live-DB
+# conformance suite is ../run-live-db-tests.sh, which uses plain
+# `docker run`/`podman run` and doesn't depend on either compose binary
+# being installed. This file mirrors the same image versions, ports, and
+# credentials so `docker compose up` is a drop-in alternative if you
+# already have compose tooling and just want the databases running.
+#
+# Versions are set via POSTGRES_VERSION / MYSQL_VERSION env vars (or a
+# .env file in this directory — see .env.example), same as the script.
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-16}
+    environment:
+      POSTGRES_USER: multilang
+      POSTGRES_PASSWORD: multilang
+      POSTGRES_DB: multilang
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U multilang"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mysql:
+    image: mysql:${MYSQL_VERSION:-8.0}
+    environment:
+      MYSQL_USER: multilang
+      MYSQL_PASSWORD: multilang
+      MYSQL_DATABASE: multilang
+      MYSQL_ROOT_PASSWORD: multilang_root
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pmultilang_root"]
+      interval: 2s
+      timeout: 3s
+      retries: 40

@@ -1,0 +1,47 @@
+# Local-only, per CLAUDE.md itself
+CLAUDE.md
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.pybuild/
+.ruff_cache/
+
+# JavaScript
+node_modules/
+npm-debug.log*
+
+# PHP
+vendor/
+composer.lock
+
+# Go build artifacts (source-built binaries, not the module itself)
+go/multilang.test
+go/conformance.test
+
+# C build artifacts -- never bake host-built binaries into anything;
+# always rebuild from source (see .dockerignore for why)
+c/*.o
+c/*.so
+c/src/*.o
+c/test/*.o
+c/test/test_validation
+c/test/test_strings
+c/test/test_conformance
+c/test/test_cpp
+
+# Local test/example scratch data (e.g. filesystem-backend content roots
+# created by running examples/basic_usage.* by hand)
+example-strings/
+*.sqlite3
+*.db
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp

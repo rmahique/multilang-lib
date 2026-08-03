@@ -1,0 +1,18 @@
+# Build artifacts must never be baked into a conformance test image —
+# they'd carry the host's library versions/paths into a container with a
+# different OS, causing runtime linker errors that have nothing to do
+# with the code under test. Always rebuild from source inside the image.
+c/*.o
+c/*.so
+c/src/*.o
+c/test/*.o
+c/test/test_validation
+c/test/test_strings
+c/test/test_conformance
+c/test/test_cpp
+
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+.pytest_cache/

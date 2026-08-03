@@ -1,0 +1,14 @@
+Metadata-Version: 2.1
+Name: multilang
+Version: 0.1.0
+Summary: Reusable multi-language string storage: retrieve_data, insert_data, db_connector
+License: GPL-3.0-or-later
+Requires-Python: >=3.9
+License-File: LICENSE
+Provides-Extra: dev
+Requires-Dist: pytest ; extra == 'dev'
+Provides-Extra: mysql
+Requires-Dist: PyMySQL ; extra == 'mysql'
+Provides-Extra: postgres
+Requires-Dist: psycopg2-binary ; extra == 'postgres'
+

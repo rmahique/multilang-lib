@@ -1,0 +1,40 @@
+# Runs the shared conformance suite (C and C++ APIs) against a real
+# Postgres/MySQL server.
+# Build context must be the repo root (needs ../conformance/cases.json):
+#   docker build -f c/Dockerfile.conformance -t multilang-conformance-c .
+#
+# DEBIAN_VERSION is a build ARG, not hardcoded, so CI can test any version:
+#   docker build --build-arg DEBIAN_VERSION=bullseye -f c/Dockerfile.conformance .
+ARG DEBIAN_VERSION=bookworm
+FROM debian:${DEBIAN_VERSION}
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential pkg-config \
+        libsqlite3-dev libpq-dev default-libmysqlclient-dev libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY conformance/ /app/conformance/
+RUN chmod +x /app/conformance/docker/run-both-backends.sh
+COPY c/ /app/c/
+
+WORKDIR /app/c
+# `make clean` first: defense against a host `c/` directory that already
+# has locally-built .o/.so/binaries in it (e.g. from a prior local `make
+# test` run) — those would otherwise be copied in stale and never
+# rebuilt, linking against the host OS's libraries instead of this
+# container's.
+#
+# Build the test binaries specifically (not `make test`, which also runs
+# them immediately against sqlite at image-build time, before any real
+# database is reachable) — plain `make`/`make all` only builds the shared
+# libraries, not the test executables.
+RUN make clean; make test/test_conformance test/test_cpp
+
+# The entrypoint runs CMD once against postgres and once against mysql,
+# inside this one container -- see run-both-backends.sh. Connection info
+# (MULTILANG_PG_HOST/_PORT, MULTILANG_MYSQL_HOST/_PORT,
+# MULTILANG_DB_USER/_PASSWORD/_NAME) is supplied at `docker run` time by
+# run-live-db-tests.sh.
+ENTRYPOINT ["/app/conformance/docker/run-both-backends.sh"]
+CMD ["sh", "-c", "LD_LIBRARY_PATH=. ./test/test_conformance && LD_LIBRARY_PATH=. ./test/test_cpp"]

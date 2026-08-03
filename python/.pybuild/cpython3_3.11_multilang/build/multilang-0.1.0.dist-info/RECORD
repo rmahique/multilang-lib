@@ -1,0 +1,14 @@
+multilang/__init__.py,sha256=Fb3Zea8gTy_0EKpjNS1xGadeZi45EFxY1_VWm_Ug11o,487
+multilang/connector.py,sha256=e2M1HVCsz2a8ybdq2n5faduSz2UOlVO_mollKFHrGGA,4283
+multilang/strings.py,sha256=49Bg4jP8PzNSY12plNPekCZF3qUxqTzmYEh6pzpPyu4,4684
+multilang/validation.py,sha256=MyjUthk6ZbcOqvP-_0e2rAlF9x6Aj_hGR-l9PJFL6Ew,8338
+multilang/backends/__init__.py,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+multilang/backends/base.py,sha256=j1pWfQbl0IAl4w805z0e2lZTt0w1iooFVOM7IO_sTxU,1113
+multilang/backends/mysql_backend.py,sha256=-Kmr4Xa0I46JsiHiQZL-R-IEnJISmoWaMnbqMSdUvRI,4898
+multilang/backends/postgres_backend.py,sha256=QpQFwbxoFxFsU_JziKDl4-EOPoF3m4ac1b4TaRaFvIk,3934
+multilang/backends/sqlite_backend.py,sha256=7ureVwKDbVTmaE0tw0EBQ-x-v_sHD47Y5gbUdHB5A6M,2846
+multilang-0.1.0.dist-info/LICENSE,sha256=OXLcl0T2SZ8Pmy2_dmlvKuetivmyPd5m1q-Gyd-zaYY,35149
+multilang-0.1.0.dist-info/METADATA,sha256=iz4nfyw8bkkV-z9LgE-SRVC2zAEY_txEog448V39wlA,416
+multilang-0.1.0.dist-info/WHEEL,sha256=2wepM1nk4DS4eFpYrW1TTqPcoGNfHhhO_i5m4cOimbo,92
+multilang-0.1.0.dist-info/top_level.txt,sha256=ogRzzSLz-ai77nZVVF63Mdy4ZtJjEOWimnAtZRSMdrw,10
+multilang-0.1.0.dist-info/RECORD,,

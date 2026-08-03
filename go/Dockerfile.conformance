@@ -1,0 +1,44 @@
+# Runs the shared conformance suite against a real Postgres/MySQL server.
+# Build context must be the repo root (needs ../conformance/cases.json):
+#   docker build -f go/Dockerfile.conformance -t multilang-conformance-go .
+#
+# GO_VERSION is a build ARG, not hardcoded, so CI can test any version:
+#   docker build --build-arg GO_VERSION=1.24 -f go/Dockerfile.conformance .
+ARG GO_VERSION=1.23
+FROM golang:${GO_VERSION}
+
+WORKDIR /app
+COPY conformance/ /app/conformance/
+RUN chmod +x /app/conformance/docker/run-both-backends.sh
+COPY go/ /app/go/
+
+WORKDIR /app/go
+RUN go mod download
+
+# modernc.org/sqlite's C-transpiled package is large enough that
+# compiling it with default parallelism can OOM a memory-constrained
+# build host; -p=1 serializes package compilation, trading build time
+# for lower peak memory. Only affects the image build, not runtime.
+ENV GOFLAGS=-p=1
+
+# Compile the test binary at build time rather than on every container
+# run: `go test` (without -c) recompiles modernc.org/sqlite's large
+# C-transpiled package from scratch each time it's invoked, which OOMs in
+# a memory-constrained environment -- and run-both-backends.sh invokes
+# the test command twice per container (once per database). Building
+# once here means each `docker run` only has to execute an
+# already-compiled binary.
+#
+# -vet=off: `go test` runs `go vet` first by default, which added to the
+# same memory pressure. vet is already run separately (see the project's
+# regular CI/dev workflow) and doesn't need database access, so skipping
+# it here is safe, not a coverage gap.
+RUN go test -c -vet=off -o conformance.test .
+
+# The entrypoint runs CMD once against postgres and once against mysql,
+# inside this one container -- see run-both-backends.sh. Connection info
+# (MULTILANG_PG_HOST/_PORT, MULTILANG_MYSQL_HOST/_PORT,
+# MULTILANG_DB_USER/_PASSWORD/_NAME) is supplied at `docker run` time by
+# run-live-db-tests.sh.
+ENTRYPOINT ["/app/conformance/docker/run-both-backends.sh"]
+CMD ["./conformance.test", "-test.run", "TestConformance", "-test.v"]

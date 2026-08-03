@@ -1,0 +1,8 @@
+*.o
+*.so
+test/test_validation
+test/test_strings
+test/test_conformance
+test/test_cpp
+examples/basic_usage
+examples/basic_usage_cpp

@@ -1,0 +1,92 @@
+# Mirrors .gitlab-ci.yml: two cost tiers, both containerized (see
+# AGENTS.md: "Tests always run in disposable containers" -- no test
+# suite in this project runs directly against a bare runner/host
+# toolchain, unit tests included).
+#
+#   unit-test   — one job per language, SQLite/filesystem only. Runs on
+#                 every push and pull request. Calls
+#                 conformance/run-unit-tests.sh, which builds (or reuses)
+#                 that port's Dockerfile.conformance image and runs its
+#                 unit tests inside a disposable container -- same image
+#                 the conformance stage uses, just with its live-DB-only
+#                 ENTRYPOINT overridden. GitHub-hosted ubuntu-latest
+#                 runners already have a working Docker daemon, so this
+#                 needs no Docker-in-Docker, it just runs the script
+#                 directly.
+#
+#   conformance — one job per language, calling the existing
+#                 conformance/run-live-db-tests.sh for that language
+#                 against real Postgres + MySQL containers. Gated to pull
+#                 requests, the default branch, and a nightly schedule
+#                 rather than every push, since it builds five images per
+#                 run.
+#
+# All versions are workflow-level env vars, never hardcoded, so a fork or
+# a manual run (workflow_dispatch) can override them without editing this
+# file.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * *" # nightly conformance run against real Postgres/MySQL
+  workflow_dispatch:
+    inputs:
+      postgres_version:
+        description: "Postgres version"
+        default: "16"
+      mysql_version:
+        description: "MySQL version"
+        default: "8.0"
+
+env:
+  POSTGRES_VERSION: ${{ github.event.inputs.postgres_version || '16' }}
+  MYSQL_VERSION: ${{ github.event.inputs.mysql_version || '8.0' }}
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+  PHP_VERSION: "8.2"
+  GO_VERSION: "1.23"
+
+jobs:
+  unit-test:
+    name: unit-test (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript, php, go, c]
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./conformance/run-unit-tests.sh ${{ matrix.language }}
+
+  # go.mod's module path is a fixed fetch address (see
+  # scripts/set-go-module-path.sh) -- it can't self-update, so this job
+  # just catches the case where the repo moved/was renamed and nobody ran
+  # the script. Cheap: no Go toolchain needed, just reads a file.
+  check-go-module-path:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          EXPECTED="${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}/go"
+          ACTUAL="$(awk '/^module /{print $2}' go/go.mod)"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "go/go.mod module path is '${ACTUAL}', expected '${EXPECTED}' for this project's remote."
+            echo "Fix: ./scripts/set-go-module-path.sh"
+            exit 1
+          fi
+
+  conformance:
+    name: conformance (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript, php, go, c]
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./conformance/run-live-db-tests.sh ${{ matrix.language }}

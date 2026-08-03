@@ -1,0 +1,31 @@
+# Runs the shared conformance suite against a real Postgres/MySQL server.
+# Build context must be the repo root (needs ../conformance/cases.json):
+#   docker build -f php/Dockerfile.conformance -t multilang-conformance-php .
+#
+# PHP_VERSION is a build ARG, not hardcoded, so CI can test any version:
+#   docker build --build-arg PHP_VERSION=8.3 -f php/Dockerfile.conformance .
+ARG PHP_VERSION=8.2
+FROM php:${PHP_VERSION}-cli
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpq-dev default-libmysqlclient-dev libsqlite3-dev unzip git \
+    && docker-php-ext-install pdo_mysql pdo_pgsql pdo_sqlite \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
+COPY conformance/ /app/conformance/
+RUN chmod +x /app/conformance/docker/run-both-backends.sh
+COPY php/ /app/php/
+
+WORKDIR /app/php
+RUN composer install --no-interaction --prefer-dist
+
+# The entrypoint runs CMD once against postgres and once against mysql,
+# inside this one container -- see run-both-backends.sh. Connection info
+# (MULTILANG_PG_HOST/_PORT, MULTILANG_MYSQL_HOST/_PORT,
+# MULTILANG_DB_USER/_PASSWORD/_NAME) is supplied at `docker run` time by
+# run-live-db-tests.sh.
+ENTRYPOINT ["/app/conformance/docker/run-both-backends.sh"]
+CMD ["vendor/bin/phpunit", "--filter", "ConformanceTest"]

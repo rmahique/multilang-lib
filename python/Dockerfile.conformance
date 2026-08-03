@@ -1,0 +1,24 @@
+# Runs the shared conformance suite against a real Postgres/MySQL server.
+# Build context must be the repo root (needs ../conformance/cases.json):
+#   docker build -f python/Dockerfile.conformance -t multilang-conformance-python .
+#
+# PYTHON_VERSION is a build ARG, not hardcoded, so CI can test any version:
+#   docker build --build-arg PYTHON_VERSION=3.12 -f python/Dockerfile.conformance .
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim
+
+WORKDIR /app
+COPY conformance/ /app/conformance/
+RUN chmod +x /app/conformance/docker/run-both-backends.sh
+COPY python/ /app/python/
+
+WORKDIR /app/python
+RUN pip install --no-cache-dir -e ".[dev,postgres,mysql]"
+
+# The entrypoint runs CMD once against postgres and once against mysql,
+# inside this one container -- see run-both-backends.sh. Connection info
+# (MULTILANG_PG_HOST/_PORT, MULTILANG_MYSQL_HOST/_PORT,
+# MULTILANG_DB_USER/_PASSWORD/_NAME) is supplied at `docker run` time by
+# run-live-db-tests.sh.
+ENTRYPOINT ["/app/conformance/docker/run-both-backends.sh"]
+CMD ["python", "-m", "pytest", "tests/test_conformance.py", "-v"]

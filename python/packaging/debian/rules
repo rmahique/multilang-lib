@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+
+export PYBUILD_NAME=multilang
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	# test_conformance.py reaches outside this package to the sibling
+	# ../../conformance/cases.json, which isn't part of the Debian source
+	# tree (a real .dsc build only sees this python/ directory, same as
+	# this container build). That's the right isolation for a package
+	# build to have -- verifying identical results across every language
+	# port is a whole-repo concern (see ../../conformance/
+	# run-live-db-tests.sh), not something a single distro package build
+	# should need. Packaging only needs to confirm this package installs
+	# and its own unit/validation logic works.
+	PYTHONPATH=. python3 -m pytest tests/ -v --ignore=tests/test_conformance.py
+endif

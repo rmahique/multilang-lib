@@ -1,0 +1,18 @@
+{
+  "name": "multilang",
+  "version": "0.1.0",
+  "description": "Reusable multi-language string storage: retrieveData, insertData, dbConnector",
+  "license": "GPL-3.0-or-later",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "mysql2": "^3.11.0",
+    "pg": "^8.12.0"
+  }
+}

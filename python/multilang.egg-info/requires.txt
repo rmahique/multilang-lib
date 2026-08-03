@@ -1,0 +1,9 @@
+
+[dev]
+pytest
+
+[mysql]
+PyMySQL
+
+[postgres]
+psycopg2-binary

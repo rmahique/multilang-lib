@@ -1,0 +1,22 @@
+[project]
+name = "multilang"
+version = "0.1.0"
+description = "Reusable multi-language string storage: retrieve_data, insert_data, db_connector"
+requires-python = ">=3.9"
+license = { text = "GPL-3.0-or-later" }
+dependencies = []
+
+[project.optional-dependencies]
+postgres = ["psycopg2-binary"]
+mysql = ["PyMySQL"]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["multilang*"]
+
+[tool.setuptools]
+license-files = ["LICENSE"]

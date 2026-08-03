@@ -1,0 +1,6 @@
+multilang (0.1.0-1) unstable; urgency=medium
+
+  * Initial release: db_connector, retrieve_data, insert_data against
+    SQLite, PostgreSQL, and MySQL/MariaDB.
+
+ -- Raúl Mahiques <claude.ia@raulmahiques.com>  Wed, 29 Jul 2026 00:00:00 +0000
