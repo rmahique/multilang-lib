@@ -1,0 +1,6 @@
+golang-github-rmahique-multilang-lib (0.1.0-1) unstable; urgency=medium
+
+  * Initial release: Go source providing DBConnector, RetrieveData, and
+    InsertData against SQLite, PostgreSQL, and MySQL/MariaDB.
+
+ -- Raúl Mahiques <claude.ia@raulmahiques.com>  Thu, 06 Aug 2026 00:00:00 +0000

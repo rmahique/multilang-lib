@@ -32,7 +32,36 @@ python3 -m build --sdist --no-isolation
 rm -rf debian
 cp -r packaging/debian debian
 
+# Every commit gets a package: compute-version.sh returns the exact tag
+# when HEAD is a release, otherwise the latest tag (or pyproject.toml's
+# version if no tag exists yet) plus today's date. Prepend a fresh
+# changelog stanza with that version rather than requiring `dch`
+# (devscripts) just to edit one line -- the packaging/README.md container
+# setups don't install devscripts, and this is the only field that needs
+# to change per build.
+PYPROJECT_VERSION="$(grep -m1 '^version *= *"' pyproject.toml | sed -E 's/^version *= *"([^"]+)".*/\1/')"
+VERSION="$(../scripts/compute-version.sh deb "$PYPROJECT_VERSION")"
+{
+    echo "multilang (${VERSION}-1) unstable; urgency=medium"
+    echo
+    echo "  * Automated build for commit $(git rev-parse --short HEAD 2>/dev/null || echo unknown)."
+    echo
+    echo " -- Raúl Mahiques <claude.ia@raulmahiques.com>  $(date -u -R)"
+    echo
+    cat debian/changelog
+} > debian/changelog.new
+mv debian/changelog.new debian/changelog
+
 dpkg-buildpackage -us -uc -b
 
 rm -rf debian
-echo "Build artifacts placed in the parent directory (../*.deb)."
+
+# sha512sum next to each package this run produced, not a combined
+# SHA512SUMS -- callers (CI artifact upload, a release page) may only
+# want one specific package's checksum, not the whole batch's.
+for pkg in ../*_"${VERSION}"*.deb; do
+    [ -e "$pkg" ] || continue
+    sha512sum "$pkg" > "${pkg}.sha512"
+done
+
+echo "Build artifacts placed in the parent directory (../*.deb, ../*.deb.sha512)."

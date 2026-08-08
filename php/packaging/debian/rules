@@ -1,0 +1,23 @@
+#!/usr/bin/make -f
+
+PHP_DEST := debian/php-multilang/usr/share/php/Multilang
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# nothing to build -- plain PSR-4 source, no compile step.
+
+override_dh_auto_test:
+	# php/'s own test suite (phpunit) runs against a full `composer
+	# install` in CI's php-unit job (see ../../.github/workflows/ci.yml);
+	# this packaging build ships source only and doesn't vendor
+	# vendor/phpunit, so it can't run that suite here without reaching
+	# Packagist, which a real build farm wouldn't have.
+
+override_dh_auto_install:
+	mkdir -p $(PHP_DEST)
+	cp -r src composer.json $(PHP_DEST)/
+
+override_dh_auto_clean:
+	dh_auto_clean

@@ -1,0 +1,7 @@
+multilang (0.1.0-1) unstable; urgency=medium
+
+  * Initial release: libmultilang0 + libmultilang-dev, runtime shared
+    libraries and headers for ml_retrieve_data, ml_insert_data, and
+    ml_connect against SQLite, PostgreSQL, and MySQL/MariaDB.
+
+ -- Raúl Mahiques <claude.ia@raulmahiques.com>  Thu, 06 Aug 2026 00:00:00 +0000

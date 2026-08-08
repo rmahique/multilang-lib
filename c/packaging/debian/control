@@ -1,0 +1,38 @@
+Source: multilang
+Section: libs
+Priority: optional
+Maintainer: Raúl Mahiques <claude.ia@raulmahiques.com>
+Build-Depends: debhelper-compat (= 13),
+               pkg-config,
+               libsqlite3-dev,
+               libpq-dev,
+               default-libmysqlclient-dev,
+               libssl-dev
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+
+Package: libmultilang0
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Reusable multi-language string storage library (runtime)
+ Provides ml_retrieve_data, ml_insert_data, and ml_connect (plus a C++
+ wrapper, libmultilangxx) for storing and retrieving translated strings,
+ keyed by string_id + BCP 47 language_id, against SQLite, PostgreSQL, or
+ MySQL/MariaDB.
+ .
+ Runtime shared libraries only -- ${shlibs:Depends} (computed by
+ dpkg-shlibdeps from this build's own linked .so files) pulls in
+ whichever libpq/libsqlite3/libssl/libmariadb runtime packages this
+ build actually needs, rather than this control file guessing package
+ names that can differ across Debian/Ubuntu releases. See
+ libmultilang-dev for headers.
+
+Package: libmultilang-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: libmultilang0 (= ${binary:Version}), ${misc:Depends}
+Description: Reusable multi-language string storage library (headers)
+ Development headers (multilang.h, multilang.hpp) and unversioned .so
+ symlinks for linking against libmultilang0.

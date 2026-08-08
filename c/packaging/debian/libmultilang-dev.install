@@ -1,0 +1,4 @@
+usr/include/multilang.h
+usr/include/multilang.hpp
+usr/lib/libmultilang.so
+usr/lib/libmultilangxx.so

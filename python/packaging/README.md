@@ -9,7 +9,8 @@ distro-specific, so building on an unrelated host is not representative.
 |---|---|---|
 | Debian, Ubuntu | `build-deb.sh` | `debian/` |
 | RHEL, CentOS Stream, Fedora | `build-rpm.sh` | `rpm/multilang.spec` |
-| openSUSE, SLES | `build-rpm.sh` | `rpm/multilang.spec` (same spec, `%if 0%{?suse_version}` branches handle the differences) |
+| openSUSE Leap, SLES | `build-rpm.sh` | `rpm/multilang.spec` (same spec, `%if 0%{?suse_version}` branches handle the differences; set `MULTILANG_LEAP15_PYTHON_WORKAROUND=1` to build against the versioned `python310` package) |
+| openSUSE Tumbleweed | `build-rpm.sh` | `rpm/multilang.spec` (same spec/mechanism as Leap, but builds against the distro's current default `python3` -- do **not** set `MULTILANG_LEAP15_PYTHON_WORKAROUND`) |
 
 ## Debian / Ubuntu
 
@@ -40,12 +41,12 @@ docker run --rm -it -v "$(pwd)/..":/src -w /src fedora:latest bash -c '
 '
 ```
 
-## openSUSE / SLES
+## openSUSE Leap / SLES
 
 ```bash
 docker run --rm -it -v "$(pwd)/..":/src -w /src opensuse/leap:15 bash -c '
   zypper --non-interactive install rpm-build python310 python310-devel python310-setuptools &&
-  packaging/build-rpm.sh
+  MULTILANG_LEAP15_PYTHON_WORKAROUND=1 packaging/build-rpm.sh
 '
 ```
 
@@ -58,8 +59,24 @@ pytest happens to be importable and skips it otherwise, since
 `python310-pytest` isn't packaged either and a real build farm (mock/OBS)
 wouldn't have network access to `pip install` it anyway.
 
-Resulting RPMs land under `~/rpmbuild/RPMS/noarch/` inside the container
-(bind-mount `$HOME` or copy them out before the container exits).
+## openSUSE Tumbleweed
+
+```bash
+docker run --rm -it -v "$(pwd)/..":/src -w /src opensuse/tumbleweed bash -c '
+  zypper --non-interactive install rpm-build python3 python3-devel python3-setuptools python3-pip python3-pytest &&
+  packaging/build-rpm.sh
+'
+```
+
+Same spec and pip-wheel build mechanism as Leap 15, but Tumbleweed is a
+rolling release with an already-current default `python3`, so it builds
+against that directly instead of a versioned `python310` package — do
+**not** set `MULTILANG_LEAP15_PYTHON_WORKAROUND` here. `%check` runs for
+real on Tumbleweed since `python3-pytest` is expected to be installable.
+
+Resulting RPMs (both SUSE flavors) land under `~/rpmbuild/RPMS/noarch/`
+inside the container (bind-mount `$HOME` or copy them out before the
+container exits).
 
 ## Before a real release
 

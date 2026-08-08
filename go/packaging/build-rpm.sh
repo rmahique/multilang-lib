@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Build an RPM for RHEL/CentOS/Fedora or openSUSE Leap/Tumbleweed/SLES --
+# ships Go source only (no compiled binary). Unlike the Python spec, this
+# one is identical across every RPM family, so there's no distro-specific
+# flag to pass here.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."   # go/
+
+PKG=golang-github-rmahique-multilang-lib
+VERSION="$(../scripts/compute-version.sh rpm 0.1.0)"
+if [ -z "$VERSION" ]; then
+    echo "error: could not determine version" >&2
+    exit 1
+fi
+
+mkdir -p dist
+STAGING="$(mktemp -d)"
+DESTDIR="${STAGING}/${PKG}-${VERSION}"
+mkdir -p "$DESTDIR"
+cp ./*.go go.mod go.sum README.md ../LICENSE "$DESTDIR/"
+tar czf "dist/${PKG}-${VERSION}.tar.gz" -C "$STAGING" "${PKG}-${VERSION}"
+rm -rf "$STAGING"
+
+RPMBUILD_ROOT="${HOME}/rpmbuild"
+mkdir -p "${RPMBUILD_ROOT}"/{SOURCES,SPECS}
+cp "dist/${PKG}-${VERSION}.tar.gz" "${RPMBUILD_ROOT}/SOURCES/"
+cp packaging/rpm/golang-github-rmahique-multilang-lib.spec "${RPMBUILD_ROOT}/SPECS/"
+
+rpmbuild --define "_topdir ${RPMBUILD_ROOT}" --define "version ${VERSION}" \
+    -ba "${RPMBUILD_ROOT}/SPECS/golang-github-rmahique-multilang-lib.spec"
+
+find "${RPMBUILD_ROOT}/RPMS" "${RPMBUILD_ROOT}/SRPMS" -name "*${VERSION}*.rpm" 2>/dev/null | while read -r pkg; do
+    sha512sum "$pkg" > "${pkg}.sha512"
+done
+
+echo "Build artifacts placed under ${RPMBUILD_ROOT}/RPMS and .../SRPMS (plus matching .sha512 files)."

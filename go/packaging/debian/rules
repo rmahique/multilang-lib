@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+
+GO_IMPORT_PATH := github.com/rmahique/multilang-lib/go
+GO_DEST := debian/golang-github-rmahique-multilang-lib-dev/usr/share/gocode/src/$(GO_IMPORT_PATH)
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# nothing to build -- this package ships Go source, not a binary.
+
+override_dh_auto_test:
+	# go/'s own test suite runs in CI's go-unit job against a real Go
+	# toolchain and the full monorepo checkout (see
+	# ../../.github/workflows/ci.yml); this packaging build only needs to
+	# confirm the source tree installs to the right GOPATH layout.
+
+override_dh_auto_install:
+	mkdir -p $(GO_DEST)
+	cp -r *.go go.mod go.sum LICENSE $(GO_DEST)/
+	# examples/ isn't part of the importable package -- Debian Go
+	# packaging convention ships only what `go build` on the import path
+	# itself needs, not sample programs.
+
+override_dh_auto_clean:
+	dh_auto_clean

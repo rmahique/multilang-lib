@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+
+JS_DEST := debian/node-multilang/usr/lib/node_modules/multilang
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# nothing to build -- plain CommonJS source, no bundler/transpiler step.
+
+override_dh_auto_test:
+	# javascript/'s own test suite (npm test) runs against a full
+	# node_modules install in CI's javascript-unit job (see
+	# ../../.github/workflows/ci.yml); this packaging build ships source
+	# only and doesn't vendor node_modules, so it can't run that suite
+	# here without reaching out to the npm registry, which a real build
+	# farm (mock/OBS-equivalent for Debian) wouldn't have.
+
+override_dh_auto_install:
+	mkdir -p $(JS_DEST)
+	cp -r src package.json $(JS_DEST)/
+
+override_dh_auto_clean:
+	dh_auto_clean

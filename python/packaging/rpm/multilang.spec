@@ -1,7 +1,13 @@
 %global srcname multilang
 
+# build-rpm.sh passes --define "version ..." (packaging/compute-version.sh's
+# output) for every commit build; 0.1.0 here is only a fallback for anyone
+# invoking rpmbuild directly against this spec without going through the
+# script.
+%{!?version: %global version 0.1.0}
+
 Name:           python3-%{srcname}
-Version:        0.1.0
+Version:        %{version}
 Release:        1%{?dist}
 Summary:        Reusable multi-language string storage library
 
@@ -12,22 +18,43 @@ Source0:        %{srcname}-%{version}.tar.gz
 BuildArch:      noarch
 
 %if 0%{?suse_version}
-# openSUSE Leap 15's default python3 is 3.6 (too old for this project's
-# requires-python >=3.9); build against the versioned python310 package
-# instead. Neither python310-pip nor python310-pytest exist in Leap 15's
-# repos, so %%check below skips gracefully rather than depending on pip
-# succeeding at build time -- real RPM build farms (mock/OBS) run without
-# network access, so a pip install inside %%check wouldn't be reliable
-# there even if it works in an ad-hoc container with internet.
-BuildRequires:  python310
-BuildRequires:  python310-devel
-BuildRequires:  python310-setuptools
+# Both openSUSE Leap 15 and openSUSE Tumbleweed set %%suse_version, and
+# both build via this same pip-wheel mechanism (self-contained, doesn't
+# depend on Fedora's pyproject-rpm-macros package being available on
+# SUSE). They differ only in which python3 is usable directly:
+#
+#   - Leap 15's default python3 is 3.6, too old for this project's
+#     requires-python >=3.9 -- build-rpm.sh passes
+#     --define "leap15_python_workaround 1" for that job only, which
+#     selects the versioned python310 package here.
+#   - Tumbleweed (rolling release) already ships a current default
+#     python3, so it uses that directly, same as Fedora/RHEL would if
+#     they took this branch.
+#
+# Neither python310-pip nor python310-pytest exist in Leap 15's repos, so
+# %%check below skips gracefully rather than depending on pip succeeding
+# at build time -- real RPM build farms (mock/OBS) run without network
+# access, so a pip install inside %%check wouldn't be reliable there even
+# if it works in an ad-hoc container with internet. Tumbleweed's default
+# python3-pip/python3-pytest are expected to be installable, so %%check
+# runs for real there.
+%if 0%{?leap15_python_workaround}
+%global suse_python python3.10
+%global suse_python_pkg python310
+%else
+%global suse_python python3
+%global suse_python_pkg python3
+%endif
+BuildRequires:  %{suse_python_pkg}
+BuildRequires:  %{suse_python_pkg}-devel
+BuildRequires:  %{suse_python_pkg}-setuptools
 # %%python3_sitelib isn't defined without the base python-rpm-macros
-# package (which this spec deliberately doesn't pull in, since it would
-# point at the default python3 = 3.6, not python310) -- ask python3.10's
-# own sysconfig for the exact path it will actually install into instead
-# of guessing lib vs lib64.
-%global python3_sitelib %(python3.10 -c "import sysconfig; print(sysconfig.get_path('purelib', vars={'base': '/usr', 'platbase': '/usr'}))" 2>/dev/null || echo /usr/lib/python3.10/site-packages)
+# package (which this spec deliberately doesn't pull in on the
+# leap15_python_workaround path, since it would point at the default
+# python3 = 3.6, not python310) -- ask the target python's own sysconfig
+# for the exact path it will actually install into instead of guessing
+# lib vs lib64.
+%global python3_sitelib %(%{suse_python} -c "import sysconfig; print(sysconfig.get_path('purelib', vars={'base': '/usr', 'platbase': '/usr'}))" 2>/dev/null || echo /usr/lib/%{suse_python}/site-packages)
 %else
 # Fedora / RHEL / CentOS Stream: the modern PEP 517 build/install macros
 # (%%pyproject_wheel / %%pyproject_install), not the legacy setup.py-based
@@ -39,13 +66,12 @@ BuildRequires:  pyproject-rpm-macros
 %endif
 
 %if 0%{?suse_version}
-# rpm's own dependency generator already adds Requires: python(abi) = 3.10
-# from the installed files; the generic "python3" package doesn't exist
-# as a dependency target when building specifically against python310
-# (see the BuildRequires comment above), so requiring it here would make
-# the built package impossible to install on a system that only has
-# python310, which is exactly the target this spec builds for.
-Requires:       python310
+# rpm's own dependency generator already adds Requires: python(abi) = X.Y
+# from the installed files; requiring the generic "python3" package here
+# would make the built package impossible to install on a system that
+# only has the versioned python310 package (the leap15_python_workaround
+# case), so require whichever package name this build actually targeted.
+Requires:       %{suse_python_pkg}
 %else
 Requires:       python3
 %endif
@@ -81,15 +107,16 @@ Pulls in PyMySQL so %{srcname}'s MySQL/MariaDB backend can be used.
 # ensurepip: bootstraps pip from CPython's own bundled wheel -- no
 # network needed, unlike `pip install <anything from PyPI>`. Then build
 # the wheel with pip's own built-in PEP 517 support (--no-build-isolation
-# so it uses the already-installed python310-setuptools instead of
-# trying to fetch an isolated build environment), avoiding any
+# so it uses the already-installed %{suse_python_pkg}-setuptools instead
+# of trying to fetch an isolated build environment), avoiding any
 # dependency on the separate `build` PyPI package, which also isn't
-# packaged for python310 here.
-python3.10 -m ensurepip --upgrade >/dev/null 2>&1
-python3.10 -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
+# packaged for python310 here (Tumbleweed's default python3 does have it,
+# but this stays uniform across both SUSE flavors).
+%{suse_python} -m ensurepip --upgrade >/dev/null 2>&1
+%{suse_python} -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
 
 %install
-python3.10 -m pip install dist/*.whl --no-deps --root=%{buildroot} --prefix=/usr
+%{suse_python} -m pip install dist/*.whl --no-deps --root=%{buildroot} --prefix=/usr
 %else
 %build
 %pyproject_wheel
@@ -107,14 +134,15 @@ python3.10 -m pip install dist/*.whl --no-deps --root=%{buildroot} --prefix=/usr
 %if 0%{?suse_version}
 # Neither python310-pytest nor python310-pip is packaged in Leap 15's
 # repos (see the BuildRequires comment above), so pytest may genuinely
-# not be installable offline here. Run the tests if it happens to be
-# importable; skip with a clear message rather than failing the whole
-# package build over a test-runner that was never a hard dependency of
-# the package itself.
-if PYTHONPATH=%{buildroot}%{python3_sitelib} python3.10 -c "import pytest" >/dev/null 2>&1; then
-    PYTHONPATH=%{buildroot}%{python3_sitelib} python3.10 -m pytest tests/ -v --ignore=tests/test_conformance.py
+# not be installable offline there -- Tumbleweed's default python3-pytest
+# is expected to be available. Either way: run the tests if pytest
+# happens to be importable, and skip with a clear message rather than
+# failing the whole package build over a test-runner that was never a
+# hard dependency of the package itself.
+if PYTHONPATH=%{buildroot}%{python3_sitelib} %{suse_python} -c "import pytest" >/dev/null 2>&1; then
+    PYTHONPATH=%{buildroot}%{python3_sitelib} %{suse_python} -m pytest tests/ -v --ignore=tests/test_conformance.py
 else
-    echo "pytest not available for python3.10 on this system; skipping %%check"
+    echo "pytest not available for %{suse_python} on this system; skipping %%check"
 fi
 %else
 PYTHONPATH=%{buildroot}%{python3_sitelib} %{__python3} -m pytest tests/ -v --ignore=tests/test_conformance.py

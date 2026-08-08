@@ -1,0 +1,23 @@
+Source: php-multilang
+Section: php
+Priority: optional
+Maintainer: Raúl Mahiques <claude.ia@raulmahiques.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+
+Package: php-multilang
+Architecture: all
+Depends: php (>= 8.0), php-pdo, ${misc:Depends}
+Description: Reusable multi-language string storage library (PHP source)
+ Provides retrieveData, insertData, and dbConnector for storing and
+ retrieving translated strings, keyed by string_id + BCP 47 language_id,
+ against SQLite, PostgreSQL, or MySQL/MariaDB.
+ .
+ Ships as source under /usr/share/php/Multilang/ (PSR-4 autoloadable),
+ wrapping this project's Composer package -- not a full Packagist mirror.
+ The specific PDO driver needed (php-sqlite3, php-pgsql, php-mysql or
+ equivalent) is a Suggests, not a Depends: package names for these vary
+ across distros and PHP versions, so install whichever backend you need
+ through your distro's own PHP extension packages.
+Suggests: php-sqlite3, php-pgsql, php-mysql

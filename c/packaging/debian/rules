@@ -1,0 +1,23 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# nothing extra to build -- override_dh_auto_install below invokes
+	# `make install` directly, which does its own compile step (see
+	# ../Makefile's install-runtime/install-devel targets); running the
+	# plain `all` target here first would be redundant.
+
+override_dh_auto_test:
+	# c/'s own test suite (make test) runs in CI's c-unit job against the
+	# full monorepo checkout, including the sibling ../../conformance/
+	# cases.json this source tarball doesn't contain (see
+	# ../../.github/workflows/ci.yml); this packaging build only needs to
+	# confirm `make install` produces the right layout.
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp PREFIX=/usr
+
+override_dh_auto_clean:
+	dh_auto_clean

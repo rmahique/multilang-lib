@@ -1,0 +1,24 @@
+Source: golang-github-rmahique-multilang-lib
+Section: devel
+Priority: optional
+Maintainer: Raúl Mahiques <claude.ia@raulmahiques.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+XS-Go-Import-Path: github.com/rmahique/multilang-lib/go
+
+Package: golang-github-rmahique-multilang-lib-dev
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}
+Description: Reusable multi-language string storage library (Go source)
+ Provides RetrieveData, InsertData, and DBConnector for storing and
+ retrieving translated strings, keyed by string_id + BCP 47 language_id,
+ against SQLite, PostgreSQL, or MySQL/MariaDB.
+ .
+ Ships as Go source under the GOPATH-style /usr/share/gocode/src/ tree,
+ per Debian's Go packaging policy -- there is no compiled artifact here;
+ consumers `go build`/`go get` against the installed import path. Actual
+ database driver dependencies (github.com/lib/pq, github.com/go-sql-
+ driver/mysql, modernc.org/sqlite) are resolved by the consuming module's
+ own go.mod, not by this package.
