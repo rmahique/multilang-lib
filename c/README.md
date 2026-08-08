@@ -112,6 +112,13 @@ third-party JSON library — smaller surface, no unpinned supply-chain
 dependency for something this narrow. It is test-only tooling, not part
 of the shipped library.
 
+## Distro packages
+
+Debian/Ubuntu, RHEL/Fedora, and openSUSE/SLES packaging — real compiled
+`libmultilang0`/`libmultilang-dev` (and `-devel`) split, built via
+`../Makefile`'s `install` target — lives in `packaging/` — see
+`packaging/README.md` for build instructions.
+
 ## Example
 
 `examples/basic_usage.c` (C API) and `examples/basic_usage.cpp` (C++ API)

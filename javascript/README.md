@@ -67,6 +67,12 @@ npm test
 servers — point `MULTILANG_DB_*` env vars at one and adapt `strings.test.js`'s
 `freshConn` helper, or run in CI.
 
+## Distro packages
+
+Debian/Ubuntu, RHEL/Fedora, and openSUSE/SLES packaging (source-only,
+wrapping the npm package) lives in `packaging/` — see
+`packaging/README.md` for build instructions.
+
 ## Example
 
 `examples/basic-usage.js` is a runnable, self-contained example covering

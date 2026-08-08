@@ -23,9 +23,12 @@ rules, the schema, or connector behavior.
 ## Documentation is part of the change, not a follow-up
 
 Before calling any change done, ask whether it made something in
-`docs/`, a `README.md`, this file, `CHANGELOG.md`, or an
-`examples/basic_usage.*` wrong, incomplete, or stale — and if so, fix it
-in the same change, not a later one. "Relevant enough" means: a new
+`docs/`, a `README.md`, this file, `CHANGELOG.md`, an
+`examples/basic_usage.*`, or the examples site (`website/docs/*.md`)
+wrong, incomplete, or stale — and if so, fix it in the same change, not
+a later one. Every code block on `website/docs/*.md` is copied verbatim
+from a `<port>/examples/basic_usage.*` file — changing one without the
+other is exactly the kind of drift this rule exists to prevent. "Relevant enough" means: a new
 backend/port, a changed validation rule, a changed public function
 signature, a changed schema column, a changed env var, or a changed
 command someone would actually run. Docs that silently drift out of sync
@@ -63,6 +66,7 @@ raises for a missing row — see [`docs/errors.md`](docs/errors.md)).
 | Conformance runner | `python/tests/test_conformance.py` | `javascript/test/conformance.test.js` | `php/tests/ConformanceTest.php` | `go/conformance_test.go` | `c/test/test_conformance.c` + `test_cpp.cpp` |
 | Container test image | `python/Dockerfile.conformance` | `javascript/Dockerfile.conformance` | `php/Dockerfile.conformance` | `go/Dockerfile.conformance` | `c/Dockerfile.conformance` |
 | Runnable example | `python/examples/basic_usage.py` | `javascript/examples/basic-usage.js` | `php/examples/basic_usage.php` | `go/examples/basic_usage.go` | `c/examples/basic_usage.c` (+`.cpp`) |
+| Distro packaging (`.deb`/`.rpm`, 4 distros: Debian bookworm, Fedora latest, openSUSE Leap 15, openSUSE Tumbleweed) | `python/packaging/` | `javascript/packaging/` | `php/packaging/` | `go/packaging/` | `c/packaging/` |
 
 ## Schema (identical DDL intent in every backend)
 

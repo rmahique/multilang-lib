@@ -69,6 +69,12 @@ one and adapt `StringsTest::freshConn`, or run in CI.
 Requires the `pdo_sqlite` extension (and `pdo_pgsql`/`pdo_mysql` for those
 backends).
 
+## Distro packages
+
+Debian/Ubuntu, RHEL/Fedora, and openSUSE/SLES packaging (source-only,
+wrapping the Composer package) lives in `packaging/` — see
+`packaging/README.md` for build instructions.
+
 ## Example
 
 `examples/basic_usage.php` is a runnable, self-contained example covering

@@ -68,6 +68,12 @@ pure-Go `modernc.org/sqlite` driver — no CGO required). Postgres/MySQL
 require real servers — point `MULTILANG_DB_*` env vars at one and adapt
 `strings_test.go`'s `freshConn` helper, or run in CI.
 
+## Distro packages
+
+Debian/Ubuntu, RHEL/Fedora, and openSUSE/SLES packaging (source-only,
+GOPATH-style) lives in `packaging/` — see `packaging/README.md` for
+build instructions.
+
 ## Example
 
 `examples/basic_usage.go` is a runnable, self-contained example covering
