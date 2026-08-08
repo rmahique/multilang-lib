@@ -1,0 +1,211 @@
+# Reusable workflow: builds every language port's native package for
+# every distro documented in <language>/packaging/README.md (Debian
+# bookworm, Fedora latest, openSUSE Leap 15, openSUSE Tumbleweed -- 20
+# combinations), and uploads each as a build artifact named
+# multilang-<combo.name>. Version comes from scripts/compute-version.sh:
+# the exact tag when HEAD is a release, otherwise <latest tag or that
+# language's own manifest version> plus today's date. Each package gets
+# a matching .sha512 file (see each <language>/packaging/build-deb.sh /
+# build-rpm.sh) uploaded alongside it.
+#
+# Called from two places, kept in one file so the 20-entry matrix can't
+# drift between them (see AGENTS.md: CI configs are part of the change,
+# not a follow-up):
+#   - ci.yml     — every push and PR, so a downloadable package always
+#                  exists for the current commit, not just tagged
+#                  releases.
+#   - release.yml — on a version tag, so the same packages get attached
+#                  to the GitHub Release.
+#
+# 5 languages x 4 distros = 20 explicit combinations rather than two
+# independent matrix axes: install steps differ enough per
+# language+distro pair (Python's openSUSE Leap 15 job needs the
+# leap15_python_workaround env var that no other job needs; C needs
+# -devel packages none of the other four languages need at all) that
+# composing them from two axes would be harder to read than just
+# listing them.
+
+name: Build packages
+
+on:
+  workflow_call:
+
+jobs:
+  package:
+    name: package (${{ matrix.combo.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        combo:
+          # --- Python ---
+          - name: python-debian-bookworm
+            language: python
+            image: debian:bookworm
+            install: |
+              apt-get update &&
+              apt-get install -y build-essential debhelper dh-python python3-all \
+                                  python3-setuptools python3-pytest python3-build \
+                                  pybuild-plugin-pyproject git
+            build: packaging/build-deb.sh
+            collect: cp ../*.deb ../*.deb.sha512 dist-packages/
+          - name: python-fedora-latest
+            language: python
+            image: fedora:latest
+            install: |
+              dnf install -y rpm-build python3-devel python3-setuptools python3-pytest python3-pip git &&
+              pip install build
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: python-opensuse-leap-15
+            language: python
+            image: opensuse/leap:15
+            install: |
+              zypper --non-interactive install rpm-build python310 python310-devel python310-setuptools git
+            build: MULTILANG_LEAP15_PYTHON_WORKAROUND=1 packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: python-opensuse-tumbleweed
+            language: python
+            image: opensuse/tumbleweed
+            install: |
+              zypper --non-interactive install rpm-build python3 python3-devel python3-setuptools python3-pip python3-pytest git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+
+          # --- Go (source-only) ---
+          - name: go-debian-bookworm
+            language: go
+            image: debian:bookworm
+            install: apt-get update && apt-get install -y build-essential debhelper git
+            build: packaging/build-deb.sh
+            collect: cp ../*.deb ../*.deb.sha512 dist-packages/
+          - name: go-fedora-latest
+            language: go
+            image: fedora:latest
+            install: dnf install -y rpm-build git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: go-opensuse-leap-15
+            language: go
+            image: opensuse/leap:15
+            install: zypper --non-interactive install rpm-build git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: go-opensuse-tumbleweed
+            language: go
+            image: opensuse/tumbleweed
+            install: zypper --non-interactive install rpm-build git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+
+          # --- JavaScript (source-only, wraps the npm package) ---
+          - name: javascript-debian-bookworm
+            language: javascript
+            image: debian:bookworm
+            install: apt-get update && apt-get install -y build-essential debhelper git
+            build: packaging/build-deb.sh
+            collect: cp ../*.deb ../*.deb.sha512 dist-packages/
+          - name: javascript-fedora-latest
+            language: javascript
+            image: fedora:latest
+            install: dnf install -y rpm-build git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: javascript-opensuse-leap-15
+            language: javascript
+            image: opensuse/leap:15
+            install: zypper --non-interactive install rpm-build git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: javascript-opensuse-tumbleweed
+            language: javascript
+            image: opensuse/tumbleweed
+            install: zypper --non-interactive install rpm-build git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+
+          # --- PHP (source-only, wraps the Composer package) ---
+          - name: php-debian-bookworm
+            language: php
+            image: debian:bookworm
+            install: apt-get update && apt-get install -y build-essential debhelper git
+            build: packaging/build-deb.sh
+            collect: cp ../*.deb ../*.deb.sha512 dist-packages/
+          - name: php-fedora-latest
+            language: php
+            image: fedora:latest
+            install: dnf install -y rpm-build git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: php-opensuse-leap-15
+            language: php
+            image: opensuse/leap:15
+            install: zypper --non-interactive install rpm-build git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: php-opensuse-tumbleweed
+            language: php
+            image: opensuse/tumbleweed
+            install: zypper --non-interactive install rpm-build git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+
+          # --- C/C++ (real compiled shared-library + headers split) ---
+          - name: c-debian-bookworm
+            language: c
+            image: debian:bookworm
+            install: |
+              apt-get update &&
+              apt-get install -y build-essential debhelper pkg-config \
+                                  libsqlite3-dev libpq-dev default-libmysqlclient-dev \
+                                  libssl-dev git
+            build: packaging/build-deb.sh
+            collect: cp ../*.deb ../*.deb.sha512 dist-packages/
+          - name: c-fedora-latest
+            language: c
+            image: fedora:latest
+            install: |
+              dnf install -y rpm-build gcc gcc-c++ make pkgconfig \
+                              sqlite-devel libpq-devel openssl-devel \
+                              mariadb-connector-c-devel git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: c-opensuse-leap-15
+            language: c
+            image: opensuse/leap:15
+            install: |
+              zypper --non-interactive install rpm-build gcc gcc-c++ make pkg-config \
+                                                sqlite3-devel postgresql-devel \
+                                                libopenssl-devel libmariadb-devel git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: c-opensuse-tumbleweed
+            language: c
+            image: opensuse/tumbleweed
+            install: |
+              zypper --non-interactive install rpm-build gcc gcc-c++ make pkg-config \
+                                                sqlite3-devel postgresql-devel \
+                                                libopenssl-devel libmariadb-devel git
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+    container:
+      image: ${{ matrix.combo.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mark workspace safe for git (container runs as a different user)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install build dependencies
+        run: ${{ matrix.combo.install }}
+      - name: Build package
+        working-directory: ${{ matrix.combo.language }}
+        run: ${{ matrix.combo.build }}
+      - name: Collect package + checksum into a fixed path
+        working-directory: ${{ matrix.combo.language }}
+        run: |
+          mkdir -p dist-packages
+          ${{ matrix.combo.collect }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: multilang-${{ matrix.combo.name }}
+          path: ${{ matrix.combo.language }}/dist-packages/
+          if-no-files-found: error

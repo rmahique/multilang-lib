@@ -1,6 +1,5 @@
-# Two stages, two different costs -- both satisfy "tests always run in
-# disposable containers" (see AGENTS.md), just via two different
-# mechanisms:
+# Three stages, three different costs -- all satisfy "tests always run in
+# disposable containers" (see AGENTS.md), via different mechanisms:
 #
 #   unit-test    — one job per language, SQLite/filesystem only. Each
 #                  job's `image:` *is* its disposable container: GitLab
@@ -12,6 +11,27 @@
 #                  test` does (that script exists for the case that has
 #                  no such guarantee otherwise: a contributor's own
 #                  machine). Runs on every push and MR. Fast, cheap.
+#
+#   package      — one job per language x distro documented in each
+#                  <language>/packaging/README.md (Debian bookworm,
+#                  Fedora latest, openSUSE Leap 15, openSUSE Tumbleweed --
+#                  20 jobs total), building that distro's native package
+#                  on every push/MR (not gated, unlike conformance) so a
+#                  downloadable package always exists for the current
+#                  commit. Each job's `image:` is its disposable
+#                  container, same reasoning as unit-test. Version comes
+#                  from scripts/compute-version.sh: the exact tag when
+#                  HEAD is a release, otherwise <latest tag or that
+#                  language's own manifest version>+<today's date>.
+#                  Every package gets a matching .sha512 file, uploaded
+#                  together as a job artifact. Explicit per-job (not a
+#                  GitLab `parallel:matrix:`) because install steps
+#                  differ enough per language+distro pair -- Python's
+#                  openSUSE Leap 15 job needs an env var none of the
+#                  other 19 need, C needs several -devel packages none
+#                  of the other four languages need at all -- that a
+#                  matrix would need as much per-cell special-casing as
+#                  just listing them.
 #
 #   conformance  — one job per language, each with its own isolated
 #                  Docker-in-Docker service, calling the existing
@@ -31,6 +51,7 @@
 
 stages:
   - unit-test
+  - package
   - conformance
 
 variables:
@@ -117,6 +138,303 @@ c-unit:
     - cd c
   script:
     - make test
+
+# --- package stage: native packages for every language x distro, every push/MR ---
+
+package-python-debian:
+  stage: package
+  image: debian:bookworm
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends build-essential debhelper dh-python python3-all python3-setuptools python3-pytest python3-build pybuild-plugin-pyproject git && rm -rf /var/lib/apt/lists/*
+    - cd python
+  script:
+    - packaging/build-deb.sh
+  artifacts:
+    paths:
+      - "*.deb"
+      - "*.deb.sha512"
+    expire_in: 30 days
+
+package-python-fedora:
+  stage: package
+  image: fedora:latest
+  before_script:
+    - dnf install -y rpm-build python3-devel python3-setuptools python3-pytest python3-pip git && pip install build
+    - cd python
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - python/dist-packages/
+    expire_in: 30 days
+
+package-python-opensuse-leap:
+  stage: package
+  image: opensuse/leap:15
+  before_script:
+    - zypper --non-interactive install rpm-build python310 python310-devel python310-setuptools git
+    - cd python
+  script:
+    - MULTILANG_LEAP15_PYTHON_WORKAROUND=1 packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - python/dist-packages/
+    expire_in: 30 days
+
+package-python-opensuse-tumbleweed:
+  stage: package
+  image: opensuse/tumbleweed
+  before_script:
+    - zypper --non-interactive install rpm-build python3 python3-devel python3-setuptools python3-pip python3-pytest git
+    - cd python
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - python/dist-packages/
+    expire_in: 30 days
+
+package-go-debian:
+  stage: package
+  image: debian:bookworm
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends build-essential debhelper git && rm -rf /var/lib/apt/lists/*
+    - cd go
+  script:
+    - packaging/build-deb.sh
+  artifacts:
+    paths:
+      - "*.deb"
+      - "*.deb.sha512"
+    expire_in: 30 days
+
+package-go-fedora:
+  stage: package
+  image: fedora:latest
+  before_script:
+    - dnf install -y rpm-build git
+    - cd go
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - go/dist-packages/
+    expire_in: 30 days
+
+package-go-opensuse-leap:
+  stage: package
+  image: opensuse/leap:15
+  before_script:
+    - zypper --non-interactive install rpm-build git
+    - cd go
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - go/dist-packages/
+    expire_in: 30 days
+
+package-go-opensuse-tumbleweed:
+  stage: package
+  image: opensuse/tumbleweed
+  before_script:
+    - zypper --non-interactive install rpm-build git
+    - cd go
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - go/dist-packages/
+    expire_in: 30 days
+
+package-javascript-debian:
+  stage: package
+  image: debian:bookworm
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends build-essential debhelper git && rm -rf /var/lib/apt/lists/*
+    - cd javascript
+  script:
+    - packaging/build-deb.sh
+  artifacts:
+    paths:
+      - "*.deb"
+      - "*.deb.sha512"
+    expire_in: 30 days
+
+package-javascript-fedora:
+  stage: package
+  image: fedora:latest
+  before_script:
+    - dnf install -y rpm-build git
+    - cd javascript
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - javascript/dist-packages/
+    expire_in: 30 days
+
+package-javascript-opensuse-leap:
+  stage: package
+  image: opensuse/leap:15
+  before_script:
+    - zypper --non-interactive install rpm-build git
+    - cd javascript
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - javascript/dist-packages/
+    expire_in: 30 days
+
+package-javascript-opensuse-tumbleweed:
+  stage: package
+  image: opensuse/tumbleweed
+  before_script:
+    - zypper --non-interactive install rpm-build git
+    - cd javascript
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - javascript/dist-packages/
+    expire_in: 30 days
+
+package-php-debian:
+  stage: package
+  image: debian:bookworm
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends build-essential debhelper git && rm -rf /var/lib/apt/lists/*
+    - cd php
+  script:
+    - packaging/build-deb.sh
+  artifacts:
+    paths:
+      - "*.deb"
+      - "*.deb.sha512"
+    expire_in: 30 days
+
+package-php-fedora:
+  stage: package
+  image: fedora:latest
+  before_script:
+    - dnf install -y rpm-build git
+    - cd php
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - php/dist-packages/
+    expire_in: 30 days
+
+package-php-opensuse-leap:
+  stage: package
+  image: opensuse/leap:15
+  before_script:
+    - zypper --non-interactive install rpm-build git
+    - cd php
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - php/dist-packages/
+    expire_in: 30 days
+
+package-php-opensuse-tumbleweed:
+  stage: package
+  image: opensuse/tumbleweed
+  before_script:
+    - zypper --non-interactive install rpm-build git
+    - cd php
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - php/dist-packages/
+    expire_in: 30 days
+
+package-c-debian:
+  stage: package
+  image: debian:bookworm
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends build-essential debhelper pkg-config libsqlite3-dev libpq-dev default-libmysqlclient-dev libssl-dev git && rm -rf /var/lib/apt/lists/*
+    - cd c
+  script:
+    - packaging/build-deb.sh
+  artifacts:
+    paths:
+      - "*.deb"
+      - "*.deb.sha512"
+    expire_in: 30 days
+
+package-c-fedora:
+  stage: package
+  image: fedora:latest
+  before_script:
+    - dnf install -y rpm-build gcc gcc-c++ make pkgconfig sqlite-devel libpq-devel openssl-devel mariadb-connector-c-devel git
+    - cd c
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - c/dist-packages/
+    expire_in: 30 days
+
+package-c-opensuse-leap:
+  stage: package
+  image: opensuse/leap:15
+  before_script:
+    - zypper --non-interactive install rpm-build gcc gcc-c++ make pkg-config sqlite3-devel postgresql-devel libopenssl-devel libmariadb-devel git
+    - cd c
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - c/dist-packages/
+    expire_in: 30 days
+
+package-c-opensuse-tumbleweed:
+  stage: package
+  image: opensuse/tumbleweed
+  before_script:
+    - zypper --non-interactive install rpm-build gcc gcc-c++ make pkg-config sqlite3-devel postgresql-devel libopenssl-devel libmariadb-devel git
+    - cd c
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - c/dist-packages/
+    expire_in: 30 days
 
 # --- conformance stage: real Postgres/MySQL, one Docker-in-Docker job per language ---
 

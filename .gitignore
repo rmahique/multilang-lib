@@ -40,6 +40,23 @@ example-strings/
 *.sqlite3
 *.db
 
+# Native package build output (see each <language>/packaging/README.md --
+# these are only ever meant to be produced by CI, but .gitignore them
+# anyway in case build-deb.sh/build-rpm.sh is ever run in a local
+# container by hand)
+dist-packages/
+*.deb
+*.deb.sha512
+*.rpm
+*.rpm.sha512
+*.orig.tar.gz
+
+# Examples website build output (see website/mkdocs.yml -- only ever
+# meant to be produced by .github/workflows/pages.yml, but .gitignore it
+# anyway in case `mkdocs build`/`mkdocs serve` is ever run locally)
+/site-build/
+website/site/
+
 # Editors / OS
 .DS_Store
 .vscode/

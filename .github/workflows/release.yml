@@ -1,0 +1,53 @@
+# Triggered by pushing a version tag (v1.2.3). Builds the same 20
+# language x distro packages ci.yml builds on every push (via the shared
+# build-packages.yml reusable workflow, so the matrix can't drift between
+# the two), then attaches every .deb/.rpm/.sha512 to a GitHub Release for
+# that tag -- giving README.md a stable download link
+# (.../releases/latest/download/<file>) instead of a workflow-run
+# artifact, which has no "latest" URL and expires (see
+# build-packages.yml and README.md's Downloads section).
+#
+# Filenames are prefixed with their combo name (e.g.
+# python-fedora-latest-<pkg>.rpm) before upload: rpmbuild's %{?dist} tag
+# is empty on openSUSE (it's a Fedora-only macro by default), so without
+# this prefix the Leap 15 and Tumbleweed RPMs for the same language would
+# have identical filenames and silently overwrite each other when
+# flattened into one release's asset list.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-packages.yml
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: multilang-*
+          path: dist-packages
+      - name: Prefix each file with its combo name to guarantee unique filenames
+        run: |
+          mkdir -p release-assets
+          for dir in dist-packages/multilang-*/; do
+            combo="$(basename "$dir")"
+            combo="${combo#multilang-}"
+            for f in "$dir"*; do
+              cp "$f" "release-assets/${combo}-$(basename "$f")"
+            done
+          done
+          ls -la release-assets/
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true

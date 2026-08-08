@@ -1,0 +1,55 @@
+# Builds website/ (MkDocs + Material, see website/mkdocs.yml) and
+# deploys it to GitHub Pages on every push to main that touches the
+# site's own content or an example file it copies from. Requires a
+# one-time repo setting: Settings -> Pages -> Source: "GitHub Actions"
+# (not committed here -- that setting lives in the repo, not in a file).
+#
+# Every code block on the site is copied verbatim from
+# <language>/examples/basic_usage.* -- see website/mkdocs.yml's trailing
+# comment and AGENTS.md ("Documentation is part of the change, not a
+# follow-up") for why an example-file change and its site page must land
+# in the same commit.
+
+name: Deploy examples site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "*/examples/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r website/requirements.txt
+      - run: mkdocs build --strict -f website/mkdocs.yml -d site-build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site-build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

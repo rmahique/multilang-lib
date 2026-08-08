@@ -1,4 +1,4 @@
-# Mirrors .gitlab-ci.yml: two cost tiers, both containerized (see
+# Mirrors .gitlab-ci.yml: three cost tiers, all containerized (see
 # AGENTS.md: "Tests always run in disposable containers" -- no test
 # suite in this project runs directly against a bare runner/host
 # toolchain, unit tests included).
@@ -13,6 +13,16 @@
 #                 runners already have a working Docker daemon, so this
 #                 needs no Docker-in-Docker, it just runs the script
 #                 directly.
+#
+#   package     — builds every language's native .deb/.rpm for every
+#                 supported distro, on every push and PR. Delegates to
+#                 build-packages.yml (a reusable workflow) so release.yml
+#                 can build the exact same packages for a tagged release
+#                 without duplicating the 20-combination matrix. See
+#                 build-packages.yml for the full design rationale, and
+#                 release.yml for how a version tag turns these into
+#                 downloadable GitHub Release assets (linked from
+#                 README.md).
 #
 #   conformance — one job per language, calling the existing
 #                 conformance/run-live-db-tests.sh for that language
@@ -78,6 +88,16 @@ jobs:
             echo "Fix: ./scripts/set-go-module-path.sh"
             exit 1
           fi
+
+  # Builds every language port's native package for every distro, on
+  # every push and PR (not gated like conformance) -- so a downloadable
+  # package always exists for the current commit, not just tagged
+  # releases. The actual 20-combination matrix lives in
+  # build-packages.yml (a reusable workflow) so it can't drift between
+  # this call and release.yml's -- see build-packages.yml for the full
+  # design rationale.
+  package:
+    uses: ./.github/workflows/build-packages.yml
 
   conformance:
     name: conformance (${{ matrix.language }})
