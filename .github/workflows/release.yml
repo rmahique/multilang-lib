@@ -1,4 +1,6 @@
-# Triggered by pushing a version tag (v1.2.3). Builds the same 20
+# Triggered by pushing a version tag (1.2.3, 1.0rc1, 1.0beta -- this
+# repo's own tags have no "v" prefix, unlike the common v1.2.3 GitHub
+# convention). Builds the same 20
 # language x distro packages ci.yml builds on every push (via the shared
 # build-packages.yml reusable workflow, so the matrix can't drift between
 # the two), then attaches every .deb/.rpm/.sha512 to a GitHub Release for
@@ -19,7 +21,9 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      # Matches this repo's actual tags (1.0, 1.0rc1, 1.0beta, and future
+      # ones like 2.3.1) -- not "v*", since none of them use a v prefix.
+      - "[0-9]+.[0-9]+*"
 
 jobs:
   build:

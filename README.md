@@ -80,7 +80,7 @@ instead of a workflow-run artifact:
 
 **[Latest GitHub Release](https://github.com/rmahique/multilang-lib/releases/latest)**
 — every `.deb`/`.rpm` plus a matching `.sha512`, published whenever a
-`vX.Y.Z` tag is pushed (see
+version tag (e.g. `1.0`, `1.0rc1`) is pushed (see
 [`.github/workflows/release.yml`](.github/workflows/release.yml)).
 Filenames are prefixed with their language and distro, e.g.
 `python-fedora-latest-python3-multilang-0.2.0-1.fc40.noarch.rpm`.
