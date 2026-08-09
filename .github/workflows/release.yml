@@ -32,7 +32,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: multilang-*
           path: dist-packages
@@ -47,7 +47,7 @@ jobs:
             done
           done
           ls -la release-assets/
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: release-assets/*
           generate_release_notes: true

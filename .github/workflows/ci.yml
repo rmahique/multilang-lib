@@ -69,7 +69,7 @@ jobs:
       matrix:
         language: [python, javascript, php, go, c]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: ./conformance/run-unit-tests.sh ${{ matrix.language }}
 
   # go.mod's module path is a fixed fetch address (see
@@ -79,7 +79,7 @@ jobs:
   check-go-module-path:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: |
           EXPECTED="${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}/go"
           ACTUAL="$(awk '/^module /{print $2}' go/go.mod)"
@@ -108,5 +108,5 @@ jobs:
       matrix:
         language: [python, javascript, php, go, c]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: ./conformance/run-live-db-tests.sh ${{ matrix.language }}

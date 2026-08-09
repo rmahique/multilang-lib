@@ -24,6 +24,19 @@
 # -devel packages none of the other four languages need at all) that
 # composing them from two axes would be harder to read than just
 # listing them.
+#
+# Every combo's `image:` is a bare upstream distro image (debian:bookworm,
+# fedora:latest, opensuse/leap:15, opensuse/tumbleweed), not GitHub's own
+# runner image -- nothing is preinstalled beyond what `install:` explicitly
+# requests. Two things that bit us because of that and are easy to
+# reintroduce if a combo is copy-pasted without them:
+#   - `install:` must run BEFORE the "Mark workspace safe for git" step,
+#     not after -- git itself isn't in these images until `install:` adds
+#     it, and `git config` fails on a missing binary, not a missing repo.
+#   - Every combo installs `tar` explicitly, even though it happens to
+#     already be present in debian:bookworm/fedora:latest -- every
+#     build-rpm.sh runs `tar czf` to build the RPM SOURCES tarball, and
+#     the bare openSUSE images don't include it by default.
 
 name: Build packages
 
@@ -46,14 +59,14 @@ jobs:
               apt-get update &&
               apt-get install -y build-essential debhelper dh-python python3-all \
                                   python3-setuptools python3-pytest python3-build \
-                                  pybuild-plugin-pyproject git
+                                  pybuild-plugin-pyproject tar git
             build: packaging/build-deb.sh
             collect: cp ../*.deb ../*.deb.sha512 dist-packages/
           - name: python-fedora-latest
             language: python
             image: fedora:latest
             install: |
-              dnf install -y rpm-build python3-devel python3-setuptools python3-pytest python3-pip git &&
+              dnf install -y rpm-build python3-devel python3-setuptools python3-pytest python3-pip tar git &&
               pip install build
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
@@ -61,14 +74,14 @@ jobs:
             language: python
             image: opensuse/leap:15
             install: |
-              zypper --non-interactive install rpm-build python310 python310-devel python310-setuptools git
+              zypper --non-interactive install rpm-build python310 python310-devel python310-setuptools tar git
             build: MULTILANG_LEAP15_PYTHON_WORKAROUND=1 packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
           - name: python-opensuse-tumbleweed
             language: python
             image: opensuse/tumbleweed
             install: |
-              zypper --non-interactive install rpm-build python3 python3-devel python3-setuptools python3-pip python3-pytest git
+              zypper --non-interactive install rpm-build python3 python3-devel python3-setuptools python3-pip python3-pytest tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
 
@@ -76,25 +89,25 @@ jobs:
           - name: go-debian-bookworm
             language: go
             image: debian:bookworm
-            install: apt-get update && apt-get install -y build-essential debhelper git
+            install: apt-get update && apt-get install -y build-essential debhelper tar git
             build: packaging/build-deb.sh
             collect: cp ../*.deb ../*.deb.sha512 dist-packages/
           - name: go-fedora-latest
             language: go
             image: fedora:latest
-            install: dnf install -y rpm-build git
+            install: dnf install -y rpm-build tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
           - name: go-opensuse-leap-15
             language: go
             image: opensuse/leap:15
-            install: zypper --non-interactive install rpm-build git
+            install: zypper --non-interactive install rpm-build tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
           - name: go-opensuse-tumbleweed
             language: go
             image: opensuse/tumbleweed
-            install: zypper --non-interactive install rpm-build git
+            install: zypper --non-interactive install rpm-build tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
 
@@ -102,25 +115,25 @@ jobs:
           - name: javascript-debian-bookworm
             language: javascript
             image: debian:bookworm
-            install: apt-get update && apt-get install -y build-essential debhelper git
+            install: apt-get update && apt-get install -y build-essential debhelper tar git
             build: packaging/build-deb.sh
             collect: cp ../*.deb ../*.deb.sha512 dist-packages/
           - name: javascript-fedora-latest
             language: javascript
             image: fedora:latest
-            install: dnf install -y rpm-build git
+            install: dnf install -y rpm-build tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
           - name: javascript-opensuse-leap-15
             language: javascript
             image: opensuse/leap:15
-            install: zypper --non-interactive install rpm-build git
+            install: zypper --non-interactive install rpm-build tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
           - name: javascript-opensuse-tumbleweed
             language: javascript
             image: opensuse/tumbleweed
-            install: zypper --non-interactive install rpm-build git
+            install: zypper --non-interactive install rpm-build tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
 
@@ -128,25 +141,25 @@ jobs:
           - name: php-debian-bookworm
             language: php
             image: debian:bookworm
-            install: apt-get update && apt-get install -y build-essential debhelper git
+            install: apt-get update && apt-get install -y build-essential debhelper tar git
             build: packaging/build-deb.sh
             collect: cp ../*.deb ../*.deb.sha512 dist-packages/
           - name: php-fedora-latest
             language: php
             image: fedora:latest
-            install: dnf install -y rpm-build git
+            install: dnf install -y rpm-build tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
           - name: php-opensuse-leap-15
             language: php
             image: opensuse/leap:15
-            install: zypper --non-interactive install rpm-build git
+            install: zypper --non-interactive install rpm-build tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
           - name: php-opensuse-tumbleweed
             language: php
             image: opensuse/tumbleweed
-            install: zypper --non-interactive install rpm-build git
+            install: zypper --non-interactive install rpm-build tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
 
@@ -158,7 +171,7 @@ jobs:
               apt-get update &&
               apt-get install -y build-essential debhelper pkg-config \
                                   libsqlite3-dev libpq-dev default-libmysqlclient-dev \
-                                  libssl-dev git
+                                  libssl-dev tar git
             build: packaging/build-deb.sh
             collect: cp ../*.deb ../*.deb.sha512 dist-packages/
           - name: c-fedora-latest
@@ -167,7 +180,7 @@ jobs:
             install: |
               dnf install -y rpm-build gcc gcc-c++ make pkgconfig \
                               sqlite-devel libpq-devel openssl-devel \
-                              mariadb-connector-c-devel git
+                              mariadb-connector-c-devel tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
           - name: c-opensuse-leap-15
@@ -176,7 +189,7 @@ jobs:
             install: |
               zypper --non-interactive install rpm-build gcc gcc-c++ make pkg-config \
                                                 sqlite3-devel postgresql-devel \
-                                                libopenssl-devel libmariadb-devel git
+                                                libopenssl-devel libmariadb-devel tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
           - name: c-opensuse-tumbleweed
@@ -185,17 +198,17 @@ jobs:
             install: |
               zypper --non-interactive install rpm-build gcc gcc-c++ make pkg-config \
                                                 sqlite3-devel postgresql-devel \
-                                                libopenssl-devel libmariadb-devel git
+                                                libopenssl-devel libmariadb-devel tar git
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
     container:
       image: ${{ matrix.combo.image }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Mark workspace safe for git (container runs as a different user)
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/checkout@v7
       - name: Install build dependencies
         run: ${{ matrix.combo.install }}
+      - name: Mark workspace safe for git (container runs as a different user)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build package
         working-directory: ${{ matrix.combo.language }}
         run: ${{ matrix.combo.build }}
@@ -204,7 +217,7 @@ jobs:
         run: |
           mkdir -p dist-packages
           ${{ matrix.combo.collect }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: multilang-${{ matrix.combo.name }}
           path: ${{ matrix.combo.language }}/dist-packages/
