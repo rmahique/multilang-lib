@@ -180,13 +180,23 @@ jobs:
         # has to happen before that container exits, not in a later step.
         # $PWD (the checked-out repo) is bind-mounted in and is what
         # persists on the host afterward for actions/upload-artifact.
+        #
+        # The inner `bash -c '...'` is deliberately single-quoted, not
+        # double-quoted: matrix.combo.collect's `find "$HOME/rpmbuild/..."`
+        # needs $HOME to resolve *inside the container* (root's $HOME,
+        # where rpmbuild actually writes) -- with double quotes here, the
+        # outer runner shell expands $HOME itself (to /home/runner, which
+        # doesn't have an rpmbuild dir at all) before docker even starts,
+        # so the collect step silently finds nothing and every RPM combo
+        # fails with "No files were found" despite the package having
+        # built successfully.
         run: |
-          docker run --rm -v "$PWD:/workspace" -w "/workspace/${{ matrix.combo.language }}" pkgimg bash -c "
+          docker run --rm -v "$PWD:/workspace" -w "/workspace/${{ matrix.combo.language }}" pkgimg bash -c '
             set -e
             ${{ matrix.combo.build }}
             mkdir -p dist-packages
             ${{ matrix.combo.collect }}
-          "
+          '
       - uses: actions/upload-artifact@v7
         with:
           name: multilang-${{ matrix.combo.name }}

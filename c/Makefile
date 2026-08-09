@@ -34,13 +34,21 @@ $(LIB): $(OBJ)
 	$(CC) -shared -o $@ $(OBJ) $(PKG_LIBS) $(LDFLAGS)
 
 %.o: %.c
-	$(CC) $(CFLAGS) $(PKG_CFLAGS) -Iinclude -c -o $@ $<
+	$(CC) $(CFLAGS) $(PKG_CFLAGS) -fPIC -Iinclude -c -o $@ $<
 
 $(LIBXX): src/multilang.o $(LIB)
 	$(CXX) -shared -o $@ src/multilang.o -L. -lmultilang $(LDFLAGS)
 
+# -fPIC appended explicitly, not relied on via CXXFLAGS's own default:
+# dh_auto_build (Debian packaging) exports its own hardened CXXFLAGS
+# (dpkg-buildflags: -g -O2 -fstack-protector-strong ..., no -fPIC), which
+# overrides this file's `CXXFLAGS ?= ... -fPIC ...` default entirely --
+# silently dropping -fPIC and failing the libmultilangxx.so link with
+# "relocation ... can not be used when making a shared object". -fPIC is
+# a hard requirement for this translation unit (it always ends up in a
+# .so), not a style default debhelper should be able to override.
 src/multilang.o: src/multilang.cpp
-	$(CXX) $(CXXFLAGS) -Iinclude -c -o $@ $<
+	$(CXX) $(CXXFLAGS) -fPIC -Iinclude -c -o $@ $<
 
 test: test/test_validation test/test_strings test/test_conformance test/test_cpp
 	LD_LIBRARY_PATH=. ./test/test_validation
