@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."   # php/
 
 PKG=php-multilang
 # Avoid requiring a `php` (or `jq`) binary just to read one field.
-COMPOSER_VERSION="$(grep -m1 '"version"' composer.json 2>/dev/null | sed -E 's/.*"version" *: *"([^"]+)".*/\1/')"
+COMPOSER_VERSION="$(grep -m1 '"version"' composer.json 2>/dev/null | sed -E 's/.*"version" *: *"([^"]+)".*/\1/' || true)"
 VERSION="$(../scripts/compute-version.sh deb "${COMPOSER_VERSION:-0.1.0}")"
 
 ORIG_TARBALL="../${PKG}_${VERSION}.orig.tar.gz"

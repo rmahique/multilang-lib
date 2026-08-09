@@ -104,19 +104,26 @@ Pulls in PyMySQL so %{srcname}'s MySQL/MariaDB backend can be used.
 
 %if 0%{?suse_version}
 %build
+%if 0%{?leap15_python_workaround}
 # ensurepip: bootstraps pip from CPython's own bundled wheel -- no
-# network needed, unlike `pip install <anything from PyPI>`. Then build
-# the wheel with pip's own built-in PEP 517 support (--no-build-isolation
-# so it uses the already-installed %{suse_python_pkg}-setuptools instead
-# of trying to fetch an isolated build environment), avoiding any
-# dependency on the separate `build` PyPI package, which also isn't
-# packaged for python310 here (Tumbleweed's default python3 does have it,
-# but this stays uniform across both SUSE flavors).
+# network needed. Leap 15's python310 has no python310-pip package at
+# all, so this is the only way to get pip. Tumbleweed's default python3
+# already has python3-pip installed (see the Dockerfile/BuildRequires),
+# so running this there is not just redundant but actively fails: its
+# pip is "externally managed" (PEP 668) and ensurepip --upgrade refuses
+# to touch it without --break-system-packages.
 %{suse_python} -m ensurepip --upgrade >/dev/null 2>&1
-%{suse_python} -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
+%endif
+# --break-system-packages: needed on Tumbleweed (PEP 668 "externally
+# managed" python3-pip) even though nothing here touches the real system
+# environment -- --root/--wheel-dir redirect the actual writes, but pip
+# still checks the interpreter's own externally-managed marker before
+# doing anything. Harmless on Leap 15's freshly-ensurepip'd python310,
+# which has no such marker.
+%{suse_python} -m pip wheel . --no-deps --no-build-isolation --break-system-packages --wheel-dir dist
 
 %install
-%{suse_python} -m pip install dist/*.whl --no-deps --root=%{buildroot} --prefix=/usr
+%{suse_python} -m pip install dist/*.whl --no-deps --break-system-packages --root=%{buildroot} --prefix=/usr
 %else
 %build
 %pyproject_wheel
@@ -153,7 +160,12 @@ PYTHONPATH=%{buildroot}%{python3_sitelib} %{__python3} -m pytest tests/ -v --ign
 %license LICENSE
 %doc README.md
 %{python3_sitelib}/%{srcname}/
-%{python3_sitelib}/%{srcname}-%{version}*.dist-info/
+# Not %{srcname}-%{version}*.dist-info/: pip names the dist-info dir
+# after pyproject.toml's own static version (0.1.0), not this RPM
+# package's --define "version ..." (0.1.0^20260809 on an untagged
+# build) -- those only coincide on an actual tagged release, so this
+# glob must not assume they match.
+%{python3_sitelib}/%{srcname}-*.dist-info/
 %else
 # %%pyproject_save_files (above) recorded the exact install manifest, so
 # this doesn't need to guess at egg-info vs dist-info layout.

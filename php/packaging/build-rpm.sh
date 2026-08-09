@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."   # php/
 
 PKG=multilang
-COMPOSER_VERSION="$(grep -m1 '"version"' composer.json 2>/dev/null | sed -E 's/.*"version" *: *"([^"]+)".*/\1/')"
+COMPOSER_VERSION="$(grep -m1 '"version"' composer.json 2>/dev/null | sed -E 's/.*"version" *: *"([^"]+)".*/\1/' || true)"
 VERSION="$(../scripts/compute-version.sh rpm "${COMPOSER_VERSION:-0.1.0}")"
 if [ -z "$VERSION" ]; then
     echo "error: could not determine version" >&2
