@@ -24,6 +24,11 @@ on:
       # Matches this repo's actual tags (1.0, 1.0rc1, 1.0beta, and future
       # ones like 2.3.1) -- not "v*", since none of them use a v prefix.
       - "[0-9]+.[0-9]+*"
+  # Lets an existing tag get a Release retroactively (e.g. a tag pushed
+  # before this trigger pattern existed) without re-pushing it -- pick
+  # the tag as the ref to run this workflow from (Actions tab -> Release
+  # -> Run workflow -> Use workflow from: that tag).
+  workflow_dispatch:
 
 jobs:
   build:
