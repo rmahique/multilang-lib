@@ -1,0 +1,9 @@
+# Packaging build image for python-fedora-latest. Bakes in every dependency
+# packaging/build-deb.sh / build-rpm.sh needs, on the same distro the
+# package targets -- generated from (and must be kept in sync with) the
+# combo definition in ../../../.github/workflows/build-packages.yml.
+FROM fedora:latest
+
+RUN dnf install -y rpm-build python3-devel python3-setuptools python3-pytest python3-pip tar git && \
+    pip install build && \
+    dnf clean all

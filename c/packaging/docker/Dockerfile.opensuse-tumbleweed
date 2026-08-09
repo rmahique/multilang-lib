@@ -1,0 +1,8 @@
+# Packaging build image for c-opensuse-tumbleweed. Bakes in every dependency
+# packaging/build-deb.sh / build-rpm.sh needs, on the same distro the
+# package targets -- generated from (and must be kept in sync with) the
+# combo definition in ../../../.github/workflows/build-packages.yml.
+FROM opensuse/tumbleweed
+
+RUN zypper --non-interactive install rpm-build gcc gcc-c++ make pkg-config sqlite3-devel postgresql-devel libopenssl-devel libmariadb-devel tar git && \
+    zypper clean --all

@@ -1,0 +1,9 @@
+# Packaging build image for c-debian-bookworm. Bakes in every dependency
+# packaging/build-deb.sh / build-rpm.sh needs, on the same distro the
+# package targets -- generated from (and must be kept in sync with) the
+# combo definition in ../../../.github/workflows/build-packages.yml.
+FROM debian:bookworm
+
+RUN apt-get update && \
+    apt-get install -y build-essential debhelper pkg-config libsqlite3-dev libpq-dev default-libmysqlclient-dev libssl-dev tar git && \
+    rm -rf /var/lib/apt/lists/*

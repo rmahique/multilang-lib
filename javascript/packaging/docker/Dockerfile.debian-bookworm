@@ -1,0 +1,9 @@
+# Packaging build image for javascript-debian-bookworm. Bakes in every dependency
+# packaging/build-deb.sh / build-rpm.sh needs, on the same distro the
+# package targets -- generated from (and must be kept in sync with) the
+# combo definition in ../../../.github/workflows/build-packages.yml.
+FROM debian:bookworm
+
+RUN apt-get update && \
+    apt-get install -y build-essential debhelper tar git && \
+    rm -rf /var/lib/apt/lists/*

@@ -1,0 +1,8 @@
+# Packaging build image for c-fedora-latest. Bakes in every dependency
+# packaging/build-deb.sh / build-rpm.sh needs, on the same distro the
+# package targets -- generated from (and must be kept in sync with) the
+# combo definition in ../../../.github/workflows/build-packages.yml.
+FROM fedora:latest
+
+RUN dnf install -y rpm-build gcc gcc-c++ make pkgconfig sqlite-devel libpq-devel openssl-devel mariadb-connector-c-devel tar git && \
+    dnf clean all

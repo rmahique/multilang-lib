@@ -1,0 +1,8 @@
+# Packaging build image for php-fedora-latest. Bakes in every dependency
+# packaging/build-deb.sh / build-rpm.sh needs, on the same distro the
+# package targets -- generated from (and must be kept in sync with) the
+# combo definition in ../../../.github/workflows/build-packages.yml.
+FROM fedora:latest
+
+RUN dnf install -y rpm-build tar git && \
+    dnf clean all

@@ -1,0 +1,8 @@
+# Packaging build image for javascript-opensuse-leap-15. Bakes in every dependency
+# packaging/build-deb.sh / build-rpm.sh needs, on the same distro the
+# package targets -- generated from (and must be kept in sync with) the
+# combo definition in ../../../.github/workflows/build-packages.yml.
+FROM opensuse/leap:15
+
+RUN zypper --non-interactive install rpm-build tar git && \
+    zypper clean --all

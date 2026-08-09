@@ -26,53 +26,47 @@ get right) and each CI job's own install step below -- if a distro
 renames one of these, that job's install step is what needs updating,
 not the control file or spec.
 
-| Family | Script | Spec/control files |
-|---|---|---|
-| Debian, Ubuntu | `build-deb.sh` | `debian/` |
-| RHEL, CentOS Stream, Fedora | `build-rpm.sh` | `rpm/multilang.spec` |
-| openSUSE Leap, Tumbleweed, SLES | `build-rpm.sh` | same spec — no distro branching needed |
+`docker/` has a Dockerfile per distro with every build dependency baked
+in (this is what `.github/workflows/build-packages.yml` builds and runs
+in CI — same image, same commands, locally or in CI).
+
+| Family | Script | Spec/control files | Dockerfile |
+|---|---|---|---|
+| Debian, Ubuntu | `build-deb.sh` | `debian/` | `docker/Dockerfile.debian-bookworm` |
+| RHEL, CentOS Stream, Fedora | `build-rpm.sh` | `rpm/multilang.spec` | `docker/Dockerfile.fedora-latest` |
+| openSUSE Leap, SLES | `build-rpm.sh` | same spec — no distro branching needed | `docker/Dockerfile.opensuse-leap-15` |
+| openSUSE Tumbleweed | `build-rpm.sh` | same spec | `docker/Dockerfile.opensuse-tumbleweed` |
 
 ## Debian / Ubuntu
 
 ```bash
-docker run --rm -it -v "$(pwd)/..":/src -w /src debian:bookworm bash -c '
-  apt-get update &&
-  apt-get install -y build-essential debhelper pkg-config \
-                      libsqlite3-dev libpq-dev default-libmysqlclient-dev \
-                      libssl-dev git &&
-  packaging/build-deb.sh
-'
+docker build -t multilang-c-deb -f packaging/docker/Dockerfile.debian-bookworm packaging/docker
+docker run --rm -v "$(pwd)/..":/workspace -w /workspace/c multilang-c-deb packaging/build-deb.sh
 ```
 
 ## RHEL / CentOS Stream / Fedora
 
 ```bash
-docker run --rm -it -v "$(pwd)/..":/src -w /src fedora:latest bash -c '
-  dnf install -y rpm-build gcc gcc-c++ make pkgconfig \
-                  sqlite-devel libpq-devel openssl-devel \
-                  mariadb-connector-c-devel git &&
-  packaging/build-rpm.sh
-'
+docker build -t multilang-c-rpm -f packaging/docker/Dockerfile.fedora-latest packaging/docker
+docker run --rm -v "$(pwd)/..":/workspace -w /workspace/c multilang-c-rpm packaging/build-rpm.sh
 ```
 
 ## openSUSE (Leap 15, Tumbleweed) / SLES
 
 ```bash
-docker run --rm -it -v "$(pwd)/..":/src -w /src opensuse/tumbleweed bash -c '
-  zypper --non-interactive install rpm-build gcc gcc-c++ make pkg-config \
-                                    sqlite3-devel postgresql-devel \
-                                    libopenssl-devel libmariadb-devel git &&
-  packaging/build-rpm.sh
-'
+docker build -t multilang-c-suse -f packaging/docker/Dockerfile.opensuse-tumbleweed packaging/docker
+docker run --rm -v "$(pwd)/..":/workspace -w /workspace/c multilang-c-suse packaging/build-rpm.sh
 ```
 
-The Fedora/openSUSE package names above (`sqlite-devel` vs
-`sqlite3-devel`, `libpq-devel` vs `postgresql-devel`,
-`mariadb-connector-c-devel` vs `libmariadb-devel`) are this script's own
+(swap the Dockerfile for `Dockerfile.opensuse-leap-15` — the spec is
+identical either way).
+
+The Fedora/openSUSE package names baked into each Dockerfile
+(`sqlite-devel` vs `sqlite3-devel`, `libpq-devel` vs `postgresql-devel`,
+`mariadb-connector-c-devel` vs `libmariadb-devel`) are this project's own
 best-effort guess for the *install step*, not something the spec itself
 depends on getting right (see the dependency-names note above) -- if a
-distro's package name has moved, only this command (and the matching CI
-job) needs updating.
+distro's package name has moved, only that Dockerfile needs updating.
 
 ## Before a real release
 

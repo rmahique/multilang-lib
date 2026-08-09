@@ -14,39 +14,40 @@ native-addon/npm-registry packages without a stable, verified name across
 every distro this repo targets, so pulling in the wrong one via a system
 package manager would be worse than leaving it to `npm install`.
 
-| Family | Script | Spec/control files |
-|---|---|---|
-| Debian, Ubuntu | `build-deb.sh` | `debian/` |
-| RHEL, CentOS Stream, Fedora | `build-rpm.sh` | `rpm/nodejs-multilang.spec` |
-| openSUSE Leap, Tumbleweed, SLES | `build-rpm.sh` | same spec — no distro branching needed |
+`docker/` has a Dockerfile per distro with every build dependency baked
+in (this is what `.github/workflows/build-packages.yml` builds and runs
+in CI — same image, same commands, locally or in CI).
+
+| Family | Script | Spec/control files | Dockerfile |
+|---|---|---|---|
+| Debian, Ubuntu | `build-deb.sh` | `debian/` | `docker/Dockerfile.debian-bookworm` |
+| RHEL, CentOS Stream, Fedora | `build-rpm.sh` | `rpm/nodejs-multilang.spec` | `docker/Dockerfile.fedora-latest` |
+| openSUSE Leap, SLES | `build-rpm.sh` | same spec — no distro branching needed | `docker/Dockerfile.opensuse-leap-15` |
+| openSUSE Tumbleweed | `build-rpm.sh` | same spec | `docker/Dockerfile.opensuse-tumbleweed` |
 
 ## Debian / Ubuntu
 
 ```bash
-docker run --rm -it -v "$(pwd)/..":/src -w /src debian:bookworm bash -c '
-  apt-get update &&
-  apt-get install -y build-essential debhelper git &&
-  packaging/build-deb.sh
-'
+docker build -t multilang-js-deb -f packaging/docker/Dockerfile.debian-bookworm packaging/docker
+docker run --rm -v "$(pwd)/..":/workspace -w /workspace/javascript multilang-js-deb packaging/build-deb.sh
 ```
 
 ## RHEL / CentOS Stream / Fedora
 
 ```bash
-docker run --rm -it -v "$(pwd)/..":/src -w /src fedora:latest bash -c '
-  dnf install -y rpm-build git &&
-  packaging/build-rpm.sh
-'
+docker build -t multilang-js-rpm -f packaging/docker/Dockerfile.fedora-latest packaging/docker
+docker run --rm -v "$(pwd)/..":/workspace -w /workspace/javascript multilang-js-rpm packaging/build-rpm.sh
 ```
 
 ## openSUSE (Leap 15, Tumbleweed) / SLES
 
 ```bash
-docker run --rm -it -v "$(pwd)/..":/src -w /src opensuse/tumbleweed bash -c '
-  zypper --non-interactive install rpm-build git &&
-  packaging/build-rpm.sh
-'
+docker build -t multilang-js-suse -f packaging/docker/Dockerfile.opensuse-tumbleweed packaging/docker
+docker run --rm -v "$(pwd)/..":/workspace -w /workspace/javascript multilang-js-suse packaging/build-rpm.sh
 ```
+
+(swap the Dockerfile for `Dockerfile.opensuse-leap-15` — the spec is
+identical either way).
 
 ## Before a real release
 
