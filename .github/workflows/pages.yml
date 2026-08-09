@@ -39,7 +39,11 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r website/requirements.txt
-      - run: mkdocs build --strict -f website/mkdocs.yml -d site-build
+      # -d (site_dir) resolves relative to the config file's own directory
+      # (website/), not the shell's cwd -- same as docs_dir. An absolute
+      # path sidesteps that ambiguity instead of relying on where mkdocs
+      # happens to land it.
+      - run: mkdocs build --strict -f website/mkdocs.yml -d "$GITHUB_WORKSPACE/site-build"
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site-build
