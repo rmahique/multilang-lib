@@ -192,7 +192,8 @@ jobs:
         # built successfully.
         run: |
           docker run --rm -v "$PWD:/workspace" -w "/workspace/${{ matrix.combo.language }}" pkgimg bash -c '
-            set -e
+            set -ex
+            echo "container started, pwd=$(pwd), whoami=$(whoami)"
             ${{ matrix.combo.build }}
             mkdir -p dist-packages
             ${{ matrix.combo.collect }}

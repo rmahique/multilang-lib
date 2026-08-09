@@ -17,7 +17,11 @@ override_dh_auto_test:
 
 override_dh_auto_install:
 	mkdir -p $(GO_DEST)
-	cp -r *.go go.mod go.sum LICENSE $(GO_DEST)/
+	# LICENSE lives at the repo root, not in go/ -- debian/rules always
+	# runs with the package's own top-level dir (go/) as cwd, whether
+	# that's a real dpkg-source-extracted tree or (as this project's own
+	# build-deb.sh does) the live checkout itself.
+	cp -r *.go go.mod go.sum ../LICENSE $(GO_DEST)/
 	# examples/ isn't part of the importable package -- Debian Go
 	# packaging convention ships only what `go build` on the import path
 	# itself needs, not sample programs.
