@@ -38,6 +38,12 @@ SELECT content FROM strings
 WHERE language_id = $1 AND string_id = $2 AND context = $3
 `;
 
+const SELECT_ROWS_BASE = `
+SELECT string_id, language_id, context, content, original_language,
+       status, source_checksum, updated_by, date_updated
+FROM strings
+`;
+
 class PostgresBackend {
   /** @param {import('pg').Client} client An already-connected client. */
   constructor(client) {
@@ -117,6 +123,28 @@ class PostgresBackend {
       row.updated_by,
       row.date_updated,
     ]);
+  }
+
+  /** Return every row matching whichever of language_id/context/status are non-null. */
+  async selectRows({ language_id = null, context = null, status = null } = {}) {
+    const clauses = [];
+    const params = [];
+    if (language_id !== null) {
+      params.push(language_id);
+      clauses.push(`language_id = $${params.length}`);
+    }
+    if (context !== null) {
+      params.push(context);
+      clauses.push(`context = $${params.length}`);
+    }
+    if (status !== null) {
+      params.push(status);
+      clauses.push(`status = $${params.length}`);
+    }
+    let sql = SELECT_ROWS_BASE;
+    if (clauses.length) sql += 'WHERE ' + clauses.join(' AND ');
+    const res = await this._client.query(sql, params);
+    return res.rows;
   }
 
   /** Close the underlying connection. */

@@ -33,6 +33,13 @@ extern "C" {
 #define ML_MAX_STATUS_LEN 20
 #define ML_ERRBUF_LEN 256
 
+/* ml_search_data limits -- see docs/search.md for the rationale behind
+ * these specific numbers and the exact/natural/regex semantics. */
+#define ML_MAX_SEARCH_QUERY_LEN 500
+#define ML_MIN_SEARCH_LIMIT 1
+#define ML_MAX_SEARCH_LIMIT 500
+#define ML_DEFAULT_SEARCH_LIMIT 50
+
 typedef enum {
     ML_OK = 0,
     ML_ERR_VALIDATION = 1,
@@ -123,6 +130,79 @@ ml_status ml_retrieve_data(ml_backend *conn, const char *string_id,
 ml_status ml_insert_data(ml_backend *conn, const char *string_id,
                           const char *language_id, const char *content,
                           const ml_insert_options *opts, char *errbuf, size_t errbuf_len);
+
+/* Which of ml_search_data's three matching algorithms to use — see
+ * docs/search.md. */
+typedef enum {
+    ML_SEARCH_NATURAL = 0,
+    ML_SEARCH_EXACT = 1,
+    ML_SEARCH_REGEX = 2,
+} ml_search_mode;
+
+/*
+ * Optional fields for ml_search_data. Zero/NULL means "not set":
+ * language_id/status NULL = no filter, context NULL = no filter (a
+ * non-NULL pointer to "" filters for only the default/un-contextualized
+ * row -- "" can't double as both "no filter" and "a real filter value"
+ * the way it can for language_id/status, which are never valid as ""),
+ * case_sensitive 0 (case-insensitive), limit 0 meaning the default
+ * (ML_DEFAULT_SEARCH_LIMIT), offset 0.
+ */
+typedef struct {
+    const char *language_id;
+    const char *context;
+    const char *status;
+    int case_sensitive;
+    int limit;
+    int offset;
+} ml_search_options;
+
+/* One row as returned by ml_search_data — owned copies (malloc'd),
+ * released via ml_free_search_results. NULL means SQL NULL for the
+ * nullable fields (original_language, source_checksum, updated_by). */
+typedef struct {
+    char *string_id;
+    char *language_id;
+    char *context;
+    char *content;
+    char *original_language;
+    char *status;
+    char *source_checksum;
+    char *updated_by;
+    time_t date_updated;
+} ml_search_result;
+
+/*
+ * Search content across every row matching opts' optional filters.
+ *
+ * Matching runs entirely in-process, after fetching candidate rows from
+ * the backend filtered only by the cheap exact-match columns
+ * (language_id/context/status) — this is what guarantees identical
+ * search results across SQLite/Postgres/MySQL/filesystem: the matching
+ * logic never touches backend-specific SQL/FTS engines. See
+ * docs/search.md for the full rationale and the documented
+ * cross-language regex-flavor/case-folding limitations.
+ *
+ * ML_SEARCH_EXACT: query is a literal substring of content.
+ * ML_SEARCH_NATURAL: query is split on whitespace into terms, every one
+ *   of which must appear as a substring of content -- AND, not OR.
+ * ML_SEARCH_REGEX: query is a POSIX extended regular expression (see
+ *   regex(7)) searched against content.
+ *
+ * `opts` may be NULL to use every default (see ml_search_options).
+ *
+ * On success (ML_OK), *out_results is set to a malloc'd array of
+ * *out_count rows (possibly 0), ordered by match score descending, then
+ * (language_id, string_id, context) ascending as a deterministic
+ * tiebreak. The caller must free it with ml_free_search_results.
+ */
+ml_status ml_search_data(ml_backend *conn, const char *query, ml_search_mode mode,
+                          const ml_search_options *opts,
+                          ml_search_result **out_results, size_t *out_count,
+                          char *errbuf, size_t errbuf_len);
+
+/* Frees an array returned by ml_search_data. Safe to call with results=NULL. */
+void ml_free_search_results(ml_search_result *results, size_t count);
 
 #ifdef __cplusplus
 }

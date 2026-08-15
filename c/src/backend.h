@@ -33,6 +33,22 @@ typedef struct {
     time_t date_updated;
 } ml_row;
 
+/* One full row as returned by select_rows -- owned copies (malloc'd),
+ * released via ml_backend_free_rows. NULL means SQL NULL for the
+ * nullable fields (original_language, source_checksum, updated_by),
+ * same convention as ml_row. */
+typedef struct {
+    char *string_id;
+    char *language_id;
+    char *context;
+    char *content;
+    char *original_language;
+    char *status;
+    char *source_checksum;
+    char *updated_by;
+    time_t date_updated;
+} ml_backend_row;
+
 typedef struct {
     ml_status (*ensure_schema)(void *ctx, char *errbuf, size_t errbuf_len);
 
@@ -43,6 +59,17 @@ typedef struct {
                                  char *errbuf, size_t errbuf_len);
 
     ml_status (*upsert)(void *ctx, const ml_row *row, char *errbuf, size_t errbuf_len);
+
+    /* Returns every row matching whichever of language_id/context/status
+     * are non-NULL (an omitted, NULL filter matches every value of that
+     * column) via *out_rows/*out_count. Caller must free with
+     * ml_backend_free_rows. No content matching happens here:
+     * ml_search_data does its own in-process regex/natural/exact
+     * matching over whatever this returns, which is what keeps search
+     * behavior identical across every backend (see docs/search.md). */
+    ml_status (*select_rows)(void *ctx, const char *language_id, const char *context,
+                              const char *status, ml_backend_row **out_rows, size_t *out_count,
+                              char *errbuf, size_t errbuf_len);
 
     /* Test-only: empties the `strings` table. Not part of the public API
      * (see multilang.h) — used to isolate conformance-suite cases from
@@ -60,6 +87,9 @@ struct ml_backend {
 
 /* Test-only convenience wrapper around vtable->truncate; see above. */
 ml_status ml_backend_truncate(ml_backend *conn, char *errbuf, size_t errbuf_len);
+
+/* Frees an array returned by vtable->select_rows. Safe to call with rows=NULL. */
+void ml_backend_free_rows(ml_backend_row *rows, size_t count);
 
 #ifdef __cplusplus
 }

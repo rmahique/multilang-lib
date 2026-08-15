@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Multilang\Backends;
 
+use DateTimeImmutable;
+
 /**
  * Filesystem backend — no server, no driver, just files. Useful when the
  * translation set is meant to be human-editable and diffable in version
@@ -112,6 +114,73 @@ final class FilesystemBackend implements BackendInterface
         // Atomic on POSIX for paths on the same filesystem, so a
         // concurrent reader never sees a partially written file.
         rename($tmpFile, $file);
+    }
+
+    /**
+     * Return every row matching whichever of $languageId/$context/$status
+     * are not null, by walking the directory tree instead of running a
+     * query — there's no query engine here, so this is searchData's only
+     * backend-level filtering step; the actual content matching happens
+     * afterwards, in-process, in searchData itself.
+     */
+    public function selectRows(?string $languageId, ?string $context, ?string $status): array
+    {
+        $contextDirFilter = $context === null ? null : ($context === '' ? self::DEFAULT_CONTEXT_DIR : $context);
+
+        $rows = [];
+        foreach ($this->listDirs($this->root, $languageId) as $lang) {
+            foreach ($this->listDirs("$this->root/$lang", null) as $stringId) {
+                foreach ($this->listDirs("$this->root/$lang/$stringId", $contextDirFilter) as $ctxDirName) {
+                    $file = "$this->root/$lang/$stringId/$ctxDirName/" . self::CONTENT_FILENAME;
+                    if (!is_file($file)) {
+                        continue;
+                    }
+                    $record = json_decode(file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
+                    if ($status !== null && $record['status'] !== $status) {
+                        continue;
+                    }
+                    $rows[] = [
+                        'string_id' => $stringId,
+                        'language_id' => $lang,
+                        'context' => $ctxDirName === self::DEFAULT_CONTEXT_DIR ? '' : $ctxDirName,
+                        'content' => $record['content'],
+                        'original_language' => $record['original_language'],
+                        'status' => $record['status'],
+                        'source_checksum' => $record['source_checksum'],
+                        'updated_by' => $record['updated_by'],
+                        'date_updated' => new DateTimeImmutable($record['date_updated']),
+                    ];
+                }
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * Return the subdirectory names of $parent — just [$only] if $only is
+     * given and exists, otherwise every subdirectory (sorted, for
+     * deterministic iteration order). A missing $parent yields no
+     * entries, not an error.
+     */
+    private function listDirs(string $parent, ?string $only): array
+    {
+        if ($only !== null) {
+            return is_dir("$parent/$only") ? [$only] : [];
+        }
+        if (!is_dir($parent)) {
+            return [];
+        }
+        $entries = [];
+        foreach (scandir($parent) as $name) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            if (is_dir("$parent/$name")) {
+                $entries[] = $name;
+            }
+        }
+        sort($entries);
+        return $entries;
     }
 
     public function close(): void

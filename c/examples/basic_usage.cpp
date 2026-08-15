@@ -72,6 +72,17 @@ int main()
     std::cout << *conn.retrieve_data("post", "en", "button.publish") << "\n"; // -> "Publish"
     std::cout << *conn.retrieve_data("post", "en", "menu.item") << "\n";      // -> "Post"
 
+    // --- search_data: find rows by content, not by exact key ----------
+    conn.insert_data("welcome1", "en", "Welcome to our platform");
+    conn.insert_data("welcome2", "en", "Welcome back, friend");
+    multilang::SearchOptions search_opts;
+    search_opts.language_id = "en";
+    for (const auto &row : conn.search_data("welcome", multilang::SearchMode::Natural, search_opts)) {
+        std::cout << row.string_id << " -> " << row.content << "\n";
+    }
+    // -> welcome1 -> Welcome to our platform
+    // -> welcome2 -> Welcome back, friend
+
     // --- retrieve_data on a row that doesn't exist: nullopt, not an error
     auto missing = conn.retrieve_data("greeting", "fr");
     std::cout << "has_value: " << std::boolalpha << missing.has_value() << "\n"; // -> false

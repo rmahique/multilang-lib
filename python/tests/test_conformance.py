@@ -18,7 +18,7 @@ import os
 
 import pytest
 
-from multilang import db_connector, retrieve_data, insert_data, ValidationError
+from multilang import db_connector, retrieve_data, insert_data, search_data, ValidationError
 
 _CASES_PATH = os.path.join(
     os.path.dirname(__file__), "..", "..", "conformance", "cases.json"
@@ -27,7 +27,20 @@ _CASES_PATH = os.path.join(
 with open(_CASES_PATH, encoding="utf-8") as f:
     _SUITE = json.load(f)
 
-_OPS = {"retrieve_data": retrieve_data, "insert_data": insert_data}
+_OPS = {"retrieve_data": retrieve_data, "insert_data": insert_data, "search_data": search_data}
+
+# search_data returns full rows (dicts), not a single JSON-comparable
+# value like retrieve_data -- cases.json's "expect" for this op is an
+# array of [language_id, string_id, context] triples, so the actual
+# result is projected down to that same shape before comparing. See
+# docs/conformance.md.
+_SEARCH_OPS = {"search_data"}
+
+
+def _project(op, result):
+    if op in _SEARCH_OPS:
+        return [[row["language_id"], row["string_id"], row["context"]] for row in result]
+    return result
 
 _BACKEND = os.environ.get("MULTILANG_DB_BACKEND", "sqlite")
 
@@ -80,4 +93,4 @@ def test_conformance_case(case, conn):
 
         result = func(conn, **args)
         if "expect" in step:
-            assert result == step["expect"]
+            assert _project(step["op"], result) == step["expect"]

@@ -364,6 +364,257 @@ static ml_status fs_upsert(void *ctx, const ml_row *row, char *errbuf, size_t er
     return status;
 }
 
+/* Parses "%Y-%m-%dT%H:%M:%SZ" (the exact format fs_upsert writes) back
+ * into a UTC time_t -- see sqlite_backend.c's parse_utc_timestamp for
+ * why this doesn't use strptime()/timegm(). Duplicated per file rather
+ * than shared, matching this project's existing per-backend-file
+ * duplication of small helpers like set_errbuf. */
+static time_t parse_utc_timestamp(const char *text)
+{
+    int year, mon, day, hour, min, sec;
+    sscanf(text, "%d-%d-%dT%d:%d:%dZ", &year, &mon, &day, &hour, &min, &sec);
+
+    int y = year - (mon <= 2);
+    long era = (y >= 0 ? y : y - 399) / 400;
+    unsigned yoe = (unsigned) (y - era * 400);
+    unsigned doy = (unsigned) ((153 * (mon + (mon > 2 ? -3 : 9)) + 2) / 5 + day - 1);
+    unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    long days = era * 146097L + (long) doe - 719468L;
+
+    return (time_t) days * 86400 + hour * 3600 + min * 60 + sec;
+}
+
+/*
+ * Finds "key" in a content.json buffer written by fs_upsert and returns
+ * its value: a malloc'd, unescaped copy if it's a JSON string, or NULL
+ * if it's the literal `null` or the key isn't found. Generalizes
+ * fs_select_content's single-purpose "content" parser to any of the
+ * fixed keys this file itself writes -- still not a general JSON parser,
+ * since this file is the only writer (see the file-level comment above).
+ */
+static char *json_extract_field(const char *data, const char *key)
+{
+    char needle[32];
+    snprintf(needle, sizeof(needle), "\"%s\"", key);
+    const char *found = strstr(data, needle);
+    if (found == NULL) {
+        return NULL;
+    }
+    const char *p = found + strlen(needle);
+    while (*p == ' ' || *p == ':' || *p == '\n' || *p == '\r' || *p == '\t') {
+        p++;
+    }
+    if (strncmp(p, "null", 4) == 0) {
+        return NULL;
+    }
+    if (*p != '"') {
+        return NULL;
+    }
+    p++; /* past the opening quote */
+
+    char *unescaped = malloc(strlen(p) + 1);
+    char *out = unescaped;
+    while (*p != '\0' && *p != '"') {
+        if (*p == '\\' && p[1] != '\0') {
+            p++;
+            switch (*p) {
+                case 'n': *out++ = '\n'; break;
+                case 'r': *out++ = '\r'; break;
+                case 't': *out++ = '\t'; break;
+                case '"': *out++ = '"'; break;
+                case '\\': *out++ = '\\'; break;
+                case '/': *out++ = '/'; break;
+                case 'u': {
+                    unsigned int code = 0;
+                    sscanf(p + 1, "%4x", &code);
+                    *out++ = (char) code;
+                    p += 4;
+                    break;
+                }
+                default: *out++ = *p; break;
+            }
+            p++;
+        } else {
+            *out++ = *p++;
+        }
+    }
+    *out = '\0';
+    return unescaped;
+}
+
+static int compare_strp(const void *a, const void *b)
+{
+    return strcmp(*(const char **) a, *(const char **) b);
+}
+
+static void free_names(char **names, size_t count)
+{
+    for (size_t i = 0; i < count; i++) {
+        free(names[i]);
+    }
+    free(names);
+}
+
+/*
+ * Returns the subdirectory names of `parent` via *out_names/*out_count
+ * -- just [only] if `only` is given and exists, otherwise every
+ * subdirectory (sorted, for deterministic iteration order). A missing
+ * `parent` yields zero entries, not an error.
+ */
+static void list_dirs(const char *parent, const char *only, char ***out_names, size_t *out_count)
+{
+    if (only != NULL) {
+        size_t path_len = strlen(parent) + 1 + strlen(only) + 1;
+        char *path = malloc(path_len);
+        snprintf(path, path_len, "%s/%s", parent, only);
+        struct stat st;
+        int is_dir = (stat(path, &st) == 0 && S_ISDIR(st.st_mode));
+        free(path);
+        if (!is_dir) {
+            *out_names = NULL;
+            *out_count = 0;
+            return;
+        }
+        char **names = malloc(sizeof(char *));
+        names[0] = strdup(only);
+        *out_names = names;
+        *out_count = 1;
+        return;
+    }
+
+    DIR *dir = opendir(parent);
+    if (dir == NULL) {
+        *out_names = NULL;
+        *out_count = 0;
+        return;
+    }
+    size_t capacity = 8, count = 0;
+    char **names = malloc(capacity * sizeof(char *));
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        size_t path_len = strlen(parent) + 1 + strlen(entry->d_name) + 1;
+        char *path = malloc(path_len);
+        snprintf(path, path_len, "%s/%s", parent, entry->d_name);
+        struct stat st;
+        int is_dir = (stat(path, &st) == 0 && S_ISDIR(st.st_mode));
+        free(path);
+        if (!is_dir) {
+            continue;
+        }
+        if (count >= capacity) {
+            capacity *= 2;
+            names = realloc(names, capacity * sizeof(char *));
+        }
+        names[count++] = strdup(entry->d_name);
+    }
+    closedir(dir);
+
+    qsort(names, count, sizeof(char *), compare_strp);
+    *out_names = names;
+    *out_count = count;
+}
+
+/*
+ * Returns every row matching whichever of language_id/context/status are
+ * non-NULL, by walking the directory tree instead of running a query --
+ * there's no query engine here, so this is ml_search_data's only
+ * backend-level filtering step; the actual content matching happens
+ * afterwards, in-process, in ml_search_data itself.
+ */
+static ml_status fs_select_rows(void *ctx, const char *language_id, const char *context,
+                                 const char *status, ml_backend_row **out_rows, size_t *out_count,
+                                 char *errbuf, size_t errbuf_len)
+{
+    (void) errbuf;
+    (void) errbuf_len;
+    const char *root = (const char *) ctx;
+
+    const char *context_dir_filter = NULL;
+    if (context != NULL) {
+        context_dir_filter = (context[0] == '\0') ? FS_DEFAULT_CONTEXT_DIR : context;
+    }
+
+    size_t capacity = 8, count = 0;
+    ml_backend_row *rows = malloc(capacity * sizeof(ml_backend_row));
+
+    char **langs;
+    size_t lang_count;
+    list_dirs(root, language_id, &langs, &lang_count);
+    for (size_t li = 0; li < lang_count; li++) {
+        size_t lang_dir_len = strlen(root) + 1 + strlen(langs[li]) + 1;
+        char *lang_dir = malloc(lang_dir_len);
+        snprintf(lang_dir, lang_dir_len, "%s/%s", root, langs[li]);
+
+        char **string_ids;
+        size_t string_id_count;
+        list_dirs(lang_dir, NULL, &string_ids, &string_id_count);
+        for (size_t si = 0; si < string_id_count; si++) {
+            size_t sid_dir_len = strlen(lang_dir) + 1 + strlen(string_ids[si]) + 1;
+            char *sid_dir = malloc(sid_dir_len);
+            snprintf(sid_dir, sid_dir_len, "%s/%s", lang_dir, string_ids[si]);
+
+            char **ctx_dirs;
+            size_t ctx_dir_count;
+            list_dirs(sid_dir, context_dir_filter, &ctx_dirs, &ctx_dir_count);
+            for (size_t ci = 0; ci < ctx_dir_count; ci++) {
+                size_t path_len = strlen(sid_dir) + 1 + strlen(ctx_dirs[ci]) + 1 + strlen(FS_CONTENT_FILENAME) + 1;
+                char *path = malloc(path_len);
+                snprintf(path, path_len, "%s/%s/%s", sid_dir, ctx_dirs[ci], FS_CONTENT_FILENAME);
+
+                FILE *f = fopen(path, "rb");
+                free(path);
+                if (f == NULL) {
+                    continue;
+                }
+                fseek(f, 0, SEEK_END);
+                long size = ftell(f);
+                fseek(f, 0, SEEK_SET);
+                char *data = malloc((size_t) size + 1);
+                size_t read = fread(data, 1, (size_t) size, f);
+                data[read] = '\0';
+                fclose(f);
+
+                char *row_status = json_extract_field(data, "status");
+                if (status != NULL && (row_status == NULL || strcmp(row_status, status) != 0)) {
+                    free(row_status);
+                    free(data);
+                    continue;
+                }
+
+                if (count >= capacity) {
+                    capacity *= 2;
+                    rows = realloc(rows, capacity * sizeof(ml_backend_row));
+                }
+                ml_backend_row *r = &rows[count++];
+                r->string_id = strdup(string_ids[si]);
+                r->language_id = strdup(langs[li]);
+                r->context = strcmp(ctx_dirs[ci], FS_DEFAULT_CONTEXT_DIR) == 0 ? strdup("") : strdup(ctx_dirs[ci]);
+                r->content = json_extract_field(data, "content");
+                r->original_language = json_extract_field(data, "original_language");
+                r->status = row_status;
+                r->source_checksum = json_extract_field(data, "source_checksum");
+                r->updated_by = json_extract_field(data, "updated_by");
+                char *date_str = json_extract_field(data, "date_updated");
+                r->date_updated = date_str ? parse_utc_timestamp(date_str) : 0;
+                free(date_str);
+                free(data);
+            }
+            free_names(ctx_dirs, ctx_dir_count);
+            free(sid_dir);
+        }
+        free_names(string_ids, string_id_count);
+        free(lang_dir);
+    }
+    free_names(langs, lang_count);
+
+    *out_rows = rows;
+    *out_count = count;
+    return ML_OK;
+}
+
 static ml_status fs_truncate(void *ctx, char *errbuf, size_t errbuf_len)
 {
     const char *root = (const char *) ctx;
@@ -389,6 +640,7 @@ static const ml_backend_vtable FILESYSTEM_VTABLE = {
     .ensure_schema = fs_ensure_schema,
     .select_content = fs_select_content,
     .upsert = fs_upsert,
+    .select_rows = fs_select_rows,
     .truncate = fs_truncate,
     .close = fs_close,
 };

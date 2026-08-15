@@ -39,6 +39,12 @@ SELECT content FROM strings
 WHERE language_id = ? AND string_id = ? AND context = ?
 `;
 
+const SELECT_ROWS_BASE = `
+SELECT string_id, language_id, context, content, original_language,
+       status, source_checksum, updated_by, date_updated
+FROM strings
+`;
+
 class SQLiteBackend {
   /** @param {string} path Filesystem path to the SQLite database file. */
   constructor(path) {
@@ -68,6 +74,30 @@ class SQLiteBackend {
       ...row,
       date_updated: row.date_updated.toISOString(),
     });
+  }
+
+  /** Return every row matching whichever of language_id/context/status are non-null. */
+  async selectRows({ language_id = null, context = null, status = null } = {}) {
+    const clauses = [];
+    const params = [];
+    if (language_id !== null) {
+      clauses.push('language_id = ?');
+      params.push(language_id);
+    }
+    if (context !== null) {
+      clauses.push('context = ?');
+      params.push(context);
+    }
+    if (status !== null) {
+      clauses.push('status = ?');
+      params.push(status);
+    }
+    let sql = SELECT_ROWS_BASE;
+    if (clauses.length) sql += 'WHERE ' + clauses.join(' AND ');
+    const rows = this._db.prepare(sql).all(...params);
+    // SQLite has no native timestamp type; date_updated was stored as
+    // ISO-8601 text by upsert(), so it's parsed back into a Date here.
+    return rows.map((r) => ({ ...r, date_updated: new Date(r.date_updated) }));
   }
 
   /** Close the underlying connection. */

@@ -27,7 +27,7 @@ strings (
 ## Usage
 
 ```js
-const { dbConnector, retrieveData, insertData } = require('multilang');
+const { dbConnector, retrieveData, insertData, searchData } = require('multilang');
 
 const conn = await dbConnector('sqlite', { path: 'strings.db' });
 
@@ -36,8 +36,15 @@ await insertData(conn, 'greeting', 'es', 'Hola mundo', { originalLanguage: 'en' 
 
 await retrieveData(conn, 'greeting', 'es');  // -> "Hola mundo"
 
+await searchData(conn, 'hola', { mode: 'exact', languageId: 'es' });
+// -> [{ string_id: 'greeting', language_id: 'es', context: '', content: 'Hola mundo', ... }]
+
 await conn.close();
 ```
+
+`searchData` also supports `mode: 'natural'` (default; every
+whitespace-split term must appear) and `mode: 'regex'` (native `RegExp`
+syntax) — see [`../docs/search.md`](../docs/search.md).
 
 ## Credentials
 

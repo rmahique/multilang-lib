@@ -36,7 +36,14 @@ Strings::insertData($conn, 'greeting', 'en', 'Hello world');
 Strings::insertData($conn, 'greeting', 'es', 'Hola mundo', '', 'en');
 
 Strings::retrieveData($conn, 'greeting', 'es');  // -> "Hola mundo"
+
+Strings::searchData($conn, 'hola', 'exact', 'es');
+// -> [['string_id' => 'greeting', 'language_id' => 'es', 'context' => '', 'content' => 'Hola mundo', ...]]
 ```
+
+`searchData` also supports `'natural'` mode (default; every
+whitespace-split term must appear) and `'regex'` mode (PCRE syntax,
+UTF-8 mode) — see [`../docs/search.md`](../docs/search.md).
 
 ## Credentials
 

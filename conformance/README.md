@@ -16,7 +16,8 @@ it, so the suite itself can't drift out of sync between implementations.
       "operations": [
         { "op": "insert_data", "args": { ... } },
         { "op": "retrieve_data", "args": { ... }, "expect": "value or null" },
-        { "op": "insert_data", "args": { ... }, "expect_error": true }
+        { "op": "insert_data", "args": { ... }, "expect_error": true },
+        { "op": "search_data", "args": { ... }, "expect": [["language_id", "string_id", "context"], ...] }
       ]
     }
   ]
@@ -26,11 +27,20 @@ it, so the suite itself can't drift out of sync between implementations.
 - Each case runs its operations **in order** against one fresh
   connection/table (SQLite: a temp file; Postgres/MySQL: a throwaway
   schema/database), so cases never see each other's data.
-- `args` map 1:1 to `retrieve_data`/`insert_data` parameter names
-  (`string_id`, `language_id`, `content`, `context`, `original_language`,
-  `status`, `updated_by`).
+- `args` map 1:1 to `retrieve_data`/`insert_data`/`search_data` parameter
+  names (`string_id`, `language_id`, `content`, `context`,
+  `original_language`, `status`, `updated_by`, and for `search_data`:
+  `query`, `mode`, `case_sensitive`, `limit`, `offset`).
 - `expect` on a `retrieve_data` op is the exact string returned, or JSON
   `null` for "no row found."
+- `expect` on a `search_data` op is different in shape, since that
+  function returns full rows, not a single value: an array of
+  `[language_id, string_id, context]` triples, in the exact order
+  `search_data` must return them (score descending, then that triple
+  ascending as a tiebreak — see [`../docs/search.md`](../docs/search.md)).
+  Each runner projects the real result down to that same 3-field shape
+  before comparing — see that runner's own `SEARCH_OPS`/`callOp`/
+  equivalent.
 - `expect_error: true` means the operation must raise/return that
   language's equivalent of `ValidationError` — the row must NOT be written
   or returned.
@@ -132,7 +142,7 @@ that plaintext still does.
 
 ## Coverage
 
-61 cases as of the last update, grouped by what they pin down:
+72 cases as of the last update, grouped by what they pin down:
 - Basic insert/retrieve/upsert semantics
 - Case-insensitivity of every id-shaped field (`language_id`, `string_id`,
   `context`), including that a translation's `original_language` still
@@ -176,6 +186,11 @@ that plaintext still does.
   rejection, not a script-support gap; only `content` is unrestricted
 - Validation rejection for every out-of-shape input, on both
   `retrieve_data` and `insert_data`
+- `search_data`'s three modes (`exact`, `natural`, `regex`), case
+  sensitivity, `language_id`/`status` filters, pagination, relevance
+  ordering and its deterministic tiebreak, and its own validation
+  triggers (bad `mode`, an unparseable regex) — see
+  [`../docs/search.md`](../docs/search.md)
 
 ## Resolved cross-language inconsistencies
 

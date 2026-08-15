@@ -25,6 +25,14 @@ MAX_LANGUAGE_ID_LEN = 35
 
 _VALID_STATUSES = ("draft", "reviewed", "published")
 
+# search_data: see docs/search.md for the full rationale behind these
+# specific limits and the exact/natural/regex semantics.
+MAX_SEARCH_QUERY_LEN = 500
+MIN_SEARCH_LIMIT = 1
+MAX_SEARCH_LIMIT = 500
+DEFAULT_SEARCH_LIMIT = 50
+_VALID_SEARCH_MODES = ("exact", "natural", "regex")
+
 # Simplified BCP 47: primary language (2-3 letters) + optional script
 # (4 letters) + optional region (2 letters or 3 digits) + optional variants.
 # Covers the vast majority of real-world tags: en, es, pt-BR, zh-Hans,
@@ -254,3 +262,97 @@ def validate_updated_by(value):
     if len(value.encode("utf-8")) > MAX_UPDATED_BY_LEN:
         raise ValidationError("updated_by exceeds {} bytes".format(MAX_UPDATED_BY_LEN))
     return value
+
+
+def validate_search_mode(value):
+    """
+    Validate that `value` is one of search_data's three modes.
+
+    Args:
+        value: The candidate mode.
+
+    Returns:
+        `value` unchanged.
+
+    Raises:
+        ValidationError: If not one of exact/natural/regex.
+    """
+    if value not in _VALID_SEARCH_MODES:
+        raise ValidationError(
+            "mode must be one of {} — got {!r}".format(_VALID_SEARCH_MODES, value)
+        )
+    return value
+
+
+def validate_search_query(value, mode, case_sensitive):
+    """
+    Validate a search_data query and pre-process it into the form the
+    matcher for `mode` actually needs, so search_data doesn't re-derive it
+    per row.
+
+    Args:
+        value: The candidate query string.
+        mode: One of "exact"/"natural"/"regex" (already validated).
+        case_sensitive: Whether matching should be case-sensitive — baked
+            into the compiled pattern for "regex" (re.IGNORECASE),
+            otherwise applied by the caller at match time.
+
+    Returns:
+        (value, extra): extra is None for "exact", a non-empty list of
+        whitespace-split terms for "natural", or a compiled re.Pattern
+        for "regex".
+
+    Raises:
+        ValidationError: If value is empty/too long/contains NUL, if
+            mode="natural" and value has no non-whitespace terms, or if
+            mode="regex" and value fails to compile.
+    """
+    if not isinstance(value, str) or not value:
+        raise ValidationError("query must be a non-empty string")
+    if len(value.encode("utf-8")) > MAX_SEARCH_QUERY_LEN:
+        raise ValidationError("query exceeds {} bytes".format(MAX_SEARCH_QUERY_LEN))
+    if "\x00" in value:
+        raise ValidationError("query must not contain NUL bytes")
+
+    if mode == "regex":
+        flags = 0 if case_sensitive else re.IGNORECASE
+        try:
+            pattern = re.compile(value, flags)
+        except re.error as exc:
+            raise ValidationError("query is not a valid regex: {}".format(exc)) from exc
+        return value, pattern
+
+    if mode == "natural":
+        terms = value.split()
+        if not terms:
+            raise ValidationError("query must contain at least one term in natural mode")
+        return value, terms
+
+    return value, None
+
+
+def validate_search_pagination(limit, offset):
+    """
+    Validate search_data's limit/offset.
+
+    Args:
+        limit: Candidate max rows to return.
+        offset: Candidate rows to skip.
+
+    Returns:
+        (limit, offset) unchanged.
+
+    Raises:
+        ValidationError: If limit isn't an int in
+            [MIN_SEARCH_LIMIT, MAX_SEARCH_LIMIT], or offset isn't a
+            non-negative int.
+    """
+    if not isinstance(limit, int) or isinstance(limit, bool) or not (MIN_SEARCH_LIMIT <= limit <= MAX_SEARCH_LIMIT):
+        raise ValidationError(
+            "limit must be an integer between {} and {} — got {!r}".format(
+                MIN_SEARCH_LIMIT, MAX_SEARCH_LIMIT, limit
+            )
+        )
+    if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
+        raise ValidationError("offset must be a non-negative integer — got {!r}".format(offset))
+    return limit, offset

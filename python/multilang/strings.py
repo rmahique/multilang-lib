@@ -116,3 +116,135 @@ def insert_data(
 def _checksum(text):
     """Return the hex SHA-256 digest of `text`, used for source_checksum."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _ascii_fold(text):
+    """
+    Lowercase only the ASCII A-Z range, leaving every other codepoint
+    untouched. Deliberately not Unicode-aware str.lower() — search's
+    case-insensitive matching (exact/natural modes) must behave
+    identically across all five ports, and C has no Unicode-aware
+    lowercasing in its standard library (see docs/validation.md's
+    locale-dependent-tolower() bug for why this project never trusts a
+    language's own "smart" lowercasing for cross-language guarantees).
+    See docs/search.md for the resulting documented limitation: non-ASCII
+    letters (e.g. "É"/"é") only match by exact case.
+    """
+    return "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in text)
+
+
+def _count_occurrences(haystack, needle):
+    """Count non-overlapping occurrences of `needle` in `haystack`."""
+    if not needle:
+        return 0
+    count = 0
+    start = 0
+    while True:
+        idx = haystack.find(needle, start)
+        if idx == -1:
+            return count
+        count += 1
+        start = idx + len(needle)
+
+
+def _score_row(content, mode, query, extra, case_sensitive):
+    """
+    Return how many times `query` (or, for natural/regex, its
+    pre-processed form `extra`) matches `content` under `mode` — 0 means
+    no match. See docs/search.md for the exact/natural/regex semantics.
+    """
+    if mode == "regex":
+        return len(extra.findall(content))
+
+    haystack = content if case_sensitive else _ascii_fold(content)
+
+    if mode == "exact":
+        needle = query if case_sensitive else _ascii_fold(query)
+        return _count_occurrences(haystack, needle)
+
+    # natural: every term must appear at least once (AND); score is the
+    # sum of each term's occurrence count.
+    total = 0
+    for term in extra:
+        needle = term if case_sensitive else _ascii_fold(term)
+        occurrences = _count_occurrences(haystack, needle)
+        if occurrences == 0:
+            return 0
+        total += occurrences
+    return total
+
+
+def search_data(
+    conn,
+    query,
+    mode="natural",
+    language_id=None,
+    context=None,
+    status=None,
+    case_sensitive=False,
+    limit=50,
+    offset=0,
+):
+    """
+    Search `content` across every row matching the optional filters.
+
+    Matching runs entirely in-process, after fetching candidate rows from
+    the backend filtered only by the cheap exact-match columns
+    (language_id/context/status) — this is what guarantees identical
+    search results across SQLite/Postgres/MySQL/filesystem: the actual
+    matching logic below never touches backend-specific SQL/FTS
+    engines. See docs/search.md for the full rationale and the documented
+    cross-language regex-flavor/case-folding limitations.
+
+    Args:
+        conn: An open Backend instance from db_connector.
+        query: The text/pattern to search for. Non-empty, at most 500
+            UTF-8 bytes.
+        mode: "exact" (query is a literal substring of content),
+            "natural" (default; query is split on whitespace into terms,
+            every one of which must appear as a substring of content —
+            AND, not OR), or "regex" (query is a Python `re` pattern
+            searched against content).
+        language_id: Optional exact-match filter. None (default) means no
+            filter.
+        context: Optional exact-match filter. None (default) means no
+            filter; "" filters for only the default/un-contextualized row.
+        status: Optional exact-match filter. None (default) means no
+            filter.
+        case_sensitive: If False (default), exact/natural matching folds
+            ASCII letters only (non-ASCII letters always match by exact
+            case — a documented limitation, see docs/search.md) and regex
+            matching uses Python's re.IGNORECASE.
+        limit: Maximum rows to return, 1-500. Defaults to 50.
+        offset: Rows to skip before the first returned result, for
+            pagination. Defaults to 0.
+
+    Returns:
+        A list of dicts — string_id, language_id, context, content,
+        original_language, status, source_checksum, updated_by,
+        date_updated — one per matching row, ordered by match score
+        descending, then (language_id, string_id, context) ascending as a
+        deterministic tiebreak.
+
+    Raises:
+        ValidationError: If any argument fails validation.
+    """
+    mode = validation.validate_search_mode(mode)
+    query, extra = validation.validate_search_query(query, mode, case_sensitive)
+    language_id = validation.validate_optional_language_id(language_id)
+    if context is not None:
+        context = validation.validate_context(context)
+    if status is not None:
+        status = validation.validate_status(status)
+    limit, offset = validation.validate_search_pagination(limit, offset)
+
+    rows = conn.select_rows(language_id=language_id, context=context, status=status)
+
+    scored = []
+    for row in rows:
+        score = _score_row(row["content"], mode, query, extra, case_sensitive)
+        if score > 0:
+            scored.append((score, row))
+
+    scored.sort(key=lambda item: (-item[0], item[1]["language_id"], item[1]["string_id"], item[1]["context"]))
+    return [row for _, row in scored[offset : offset + limit]]

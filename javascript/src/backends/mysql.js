@@ -45,6 +45,12 @@ SELECT content FROM strings
 WHERE language_id = ? AND string_id = ? AND context = ?
 `;
 
+const SELECT_ROWS_BASE = `
+SELECT string_id, language_id, context, content, original_language,
+       status, source_checksum, updated_by, date_updated
+FROM strings
+`;
+
 class MySQLBackend {
   /** @param {import('mysql2/promise').Pool} pool An already-connected pool. */
   constructor(pool) {
@@ -120,6 +126,28 @@ class MySQLBackend {
       row.updated_by,
       row.date_updated,
     ]);
+  }
+
+  /** Return every row matching whichever of language_id/context/status are non-null. */
+  async selectRows({ language_id = null, context = null, status = null } = {}) {
+    const clauses = [];
+    const params = [];
+    if (language_id !== null) {
+      clauses.push('language_id = ?');
+      params.push(language_id);
+    }
+    if (context !== null) {
+      clauses.push('context = ?');
+      params.push(context);
+    }
+    if (status !== null) {
+      clauses.push('status = ?');
+      params.push(status);
+    }
+    let sql = SELECT_ROWS_BASE;
+    if (clauses.length) sql += 'WHERE ' + clauses.join(' AND ');
+    const [rows] = await this._pool.query(sql, params);
+    return rows;
   }
 
   /** Close the underlying connection pool. */

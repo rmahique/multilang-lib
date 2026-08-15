@@ -9,6 +9,9 @@ package multilang
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"regexp"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -123,4 +126,205 @@ func InsertData(conn Backend, stringID, languageID, content string, opts InsertO
 func checksum(text string) string {
 	sum := sha256.Sum256([]byte(text))
 	return hex.EncodeToString(sum[:])
+}
+
+// SearchMode identifies which of SearchData's three matching algorithms
+// to use — see docs/search.md.
+type SearchMode string
+
+const (
+	SearchModeExact   SearchMode = "exact"
+	SearchModeNatural SearchMode = "natural"
+	SearchModeRegex   SearchMode = "regex"
+)
+
+// SearchOptions holds SearchData's optional parameters. Zero values mean
+// "not set": LanguageID/Status "" mean no filter, Context nil means no
+// filter (a non-nil pointer to "" filters for only the
+// default/un-contextualized row — "" can't double as both "no filter"
+// and "a real filter value" the way it can for LanguageID/Status, which
+// are never valid as ""), CaseSensitive false, Limit 0 meaning the
+// default (DefaultSearchLimit), Offset 0.
+type SearchOptions struct {
+	LanguageID    string
+	Context       *string
+	Status        string
+	CaseSensitive bool
+	Limit         int
+	Offset        int
+}
+
+// SearchData searches Content across every row matching opts' optional
+// filters.
+//
+// Matching runs entirely in-process, after fetching candidate rows from
+// the backend filtered only by the cheap exact-match columns
+// (LanguageID/Context/Status) — this is what guarantees identical search
+// results across SQLite/Postgres/MySQL/filesystem: the matching logic
+// below never touches backend-specific SQL/FTS engines. See
+// docs/search.md for the full rationale and the documented
+// cross-language regex-flavor/case-folding limitations.
+//
+//   - mode="exact": query is a literal substring of Content.
+//   - mode="natural" (typical default): query is split on whitespace
+//     into terms, every one of which must appear as a substring of
+//     Content — AND, not OR.
+//   - mode="regex": query is a Go RE2 pattern (regexp package syntax)
+//     searched against Content.
+//
+// Results are ordered by match score descending, then
+// (LanguageID, StringID, Context) ascending as a deterministic tiebreak.
+func SearchData(conn Backend, query string, mode SearchMode, opts SearchOptions) ([]Row, error) {
+	mode, err := ValidateSearchMode(mode)
+	if err != nil {
+		return nil, err
+	}
+	query, terms, pattern, err := ValidateSearchQuery(query, mode, opts.CaseSensitive)
+	if err != nil {
+		return nil, err
+	}
+
+	languageID := opts.LanguageID
+	if languageID != "" {
+		languageID, err = ValidateOptionalLanguageID(languageID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var context *string
+	if opts.Context != nil {
+		validated, cErr := ValidateContext(*opts.Context)
+		if cErr != nil {
+			return nil, cErr
+		}
+		context = &validated
+	}
+	status := opts.Status
+	if status != "" {
+		status, err = ValidateStatus(status)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	limit := opts.Limit
+	if limit == 0 {
+		limit = DefaultSearchLimit
+	}
+	limit, offset, err := ValidateSearchPagination(limit, opts.Offset)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := conn.SelectRows(languageID, status, context)
+	if err != nil {
+		return nil, err
+	}
+
+	type scoredRow struct {
+		score int
+		row   Row
+	}
+	scored := make([]scoredRow, 0, len(rows))
+	for _, row := range rows {
+		score := scoreRow(row.Content, mode, query, terms, pattern, opts.CaseSensitive)
+		if score > 0 {
+			scored = append(scored, scoredRow{score, row})
+		}
+	}
+
+	sort.Slice(scored, func(i, j int) bool {
+		if scored[i].score != scored[j].score {
+			return scored[i].score > scored[j].score
+		}
+		if scored[i].row.LanguageID != scored[j].row.LanguageID {
+			return scored[i].row.LanguageID < scored[j].row.LanguageID
+		}
+		if scored[i].row.StringID != scored[j].row.StringID {
+			return scored[i].row.StringID < scored[j].row.StringID
+		}
+		return scored[i].row.Context < scored[j].row.Context
+	})
+
+	if offset >= len(scored) {
+		return []Row{}, nil
+	}
+	end := offset + limit
+	if end > len(scored) {
+		end = len(scored)
+	}
+	result := make([]Row, 0, end-offset)
+	for _, sr := range scored[offset:end] {
+		result = append(result, sr.row)
+	}
+	return result, nil
+}
+
+// scoreRow returns how many times query (or, for natural/regex, its
+// pre-processed form terms/pattern) matches content under mode — 0 means
+// no match. See docs/search.md for the exact/natural/regex semantics.
+func scoreRow(content string, mode SearchMode, query string, terms []string, pattern *regexp.Regexp, caseSensitive bool) int {
+	if mode == SearchModeRegex {
+		return len(pattern.FindAllStringIndex(content, -1))
+	}
+
+	haystack := content
+	if !caseSensitive {
+		haystack = asciiFold(content)
+	}
+
+	if mode == SearchModeExact {
+		needle := query
+		if !caseSensitive {
+			needle = asciiFold(query)
+		}
+		return countOccurrences(haystack, needle)
+	}
+
+	// natural: every term must appear at least once (AND); score is the
+	// sum of each term's occurrence count.
+	total := 0
+	for _, term := range terms {
+		needle := term
+		if !caseSensitive {
+			needle = asciiFold(term)
+		}
+		occurrences := countOccurrences(haystack, needle)
+		if occurrences == 0 {
+			return 0
+		}
+		total += occurrences
+	}
+	return total
+}
+
+// asciiFold lowercases only the ASCII A-Z range, leaving every other
+// byte untouched. Deliberately not strings.ToLower (Unicode-aware) — see
+// the Python port's _ascii_fold for why search's case-insensitive
+// matching must stay ASCII-only across every language, C included.
+func asciiFold(text string) string {
+	b := []byte(text)
+	for i, c := range b {
+		if c >= 'A' && c <= 'Z' {
+			b[i] = c + 32
+		}
+	}
+	return string(b)
+}
+
+// countOccurrences counts non-overlapping occurrences of needle in haystack.
+func countOccurrences(haystack, needle string) int {
+	if needle == "" {
+		return 0
+	}
+	count := 0
+	start := 0
+	for {
+		idx := strings.Index(haystack[start:], needle)
+		if idx == -1 {
+			return count
+		}
+		count++
+		start += idx + len(needle)
+	}
 }

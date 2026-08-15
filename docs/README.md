@@ -26,6 +26,11 @@ deliberately don't repeat per-language installation/usage instructions.
   `MULTILANG_DB_SSLMODE` TLS behavior (and why it's implemented
   differently under the hood for MySQL than for Postgres, while behaving
   identically from the caller's side).
+- **[`search.md`](search.md)** — `search_data`'s exact/natural/regex
+  modes, why matching runs in-process instead of delegating to each
+  backend's own query engine (the guarantee that decision buys, and what
+  it costs), and the ASCII-only case-folding/regex-flavor limitations
+  that follow from it.
 - **[`errors.md`](errors.md)** — how each port surfaces validation vs.
   database failures (a table of the actual exception/error types), and
   why only C/C++ wrap database errors while the other four let the

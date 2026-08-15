@@ -60,6 +60,15 @@ Strings::insertData($conn, 'post', 'en', 'Post', 'menu.item');
 echo Strings::retrieveData($conn, 'post', 'en', 'button.publish') . "\n"; // -> "Publish"
 echo Strings::retrieveData($conn, 'post', 'en', 'menu.item') . "\n";     // -> "Post"
 
+// --- searchData: find rows by content, not by exact key ---------------------
+Strings::insertData($conn, 'welcome1', 'en', 'Welcome to our platform');
+Strings::insertData($conn, 'welcome2', 'en', 'Welcome back, friend');
+foreach (Strings::searchData($conn, 'welcome', 'natural', 'en') as $row) {
+    echo "{$row['string_id']} -> {$row['content']}\n";
+}
+// -> welcome1 -> Welcome to our platform
+// -> welcome2 -> Welcome back, friend
+
 // --- retrieveData on a row that doesn't exist: null, not an error ----------
 var_dump(Strings::retrieveData($conn, 'greeting', 'fr')); // -> NULL
 

@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <regex.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -219,5 +220,135 @@ ml_status ml_validate_updated_by(const char *in, char *out, size_t out_size,
     }
     strncpy(out, in, out_size - 1);
     out[out_size - 1] = '\0';
+    return ML_OK;
+}
+
+ml_status ml_validate_search_mode(const char *in, char *errbuf, size_t errbuf_len)
+{
+    if (in == NULL || (strcmp(in, "exact") != 0 && strcmp(in, "natural") != 0 && strcmp(in, "regex") != 0)) {
+        set_errbuf(errbuf, errbuf_len, "mode must be one of [exact, natural, regex]", NULL);
+        return ML_ERR_VALIDATION;
+    }
+    return ML_OK;
+}
+
+/* Splits `value` on runs of whitespace into a NULL-terminated array of
+ * malloc'd term strings. Returns ML_ERR_VALIDATION if no terms are found. */
+static ml_status split_terms(const char *value, char ***out_terms, char *errbuf, size_t errbuf_len)
+{
+    size_t capacity = 4;
+    char **terms = malloc(capacity * sizeof(char *));
+    size_t count = 0;
+
+    const char *p = value;
+    while (*p != '\0') {
+        while (*p != '\0' && isspace((unsigned char) *p)) {
+            p++;
+        }
+        if (*p == '\0') {
+            break;
+        }
+        const char *start = p;
+        while (*p != '\0' && !isspace((unsigned char) *p)) {
+            p++;
+        }
+        size_t term_len = (size_t) (p - start);
+
+        if (count + 1 >= capacity) {
+            capacity *= 2;
+            terms = realloc(terms, capacity * sizeof(char *));
+        }
+        char *term = malloc(term_len + 1);
+        memcpy(term, start, term_len);
+        term[term_len] = '\0';
+        terms[count++] = term;
+    }
+    terms[count] = NULL;
+
+    if (count == 0) {
+        free(terms);
+        set_errbuf(errbuf, errbuf_len, "query must contain at least one term in natural mode", NULL);
+        return ML_ERR_VALIDATION;
+    }
+    *out_terms = terms;
+    return ML_OK;
+}
+
+/* Compiles `value` as a POSIX extended regex (REG_ICASE if
+ * !case_sensitive). Returns ML_ERR_VALIDATION with the engine's own
+ * compile error folded into errbuf on failure. */
+static ml_status compile_pattern(const char *value, int case_sensitive, regex_t **out_pattern,
+                                  char *errbuf, size_t errbuf_len)
+{
+    regex_t *re = malloc(sizeof(regex_t));
+    int flags = REG_EXTENDED;
+    if (!case_sensitive) {
+        flags |= REG_ICASE;
+    }
+    int rc = regcomp(re, value, flags);
+    if (rc != 0) {
+        char errmsg[256];
+        regerror(rc, re, errmsg, sizeof(errmsg));
+        free(re);
+        set_errbuf(errbuf, errbuf_len, "query is not a valid regex: %s", errmsg);
+        return ML_ERR_VALIDATION;
+    }
+    *out_pattern = re;
+    return ML_OK;
+}
+
+ml_status ml_validate_search_query(const char *in, const char *mode, int case_sensitive,
+                                    ml_search_query *out, char *errbuf, size_t errbuf_len)
+{
+    out->terms = NULL;
+    out->pattern = NULL;
+
+    /* Same structural note as ml_validate_content: this ABI takes
+     * NUL-terminated C strings, so there's no way for an embedded NUL to
+     * survive strlen() -- no explicit check is possible or needed. */
+    if (in == NULL || in[0] == '\0') {
+        set_errbuf(errbuf, errbuf_len, "query must be a non-empty string", NULL);
+        return ML_ERR_VALIDATION;
+    }
+    if (strlen(in) > ML_MAX_SEARCH_QUERY_LEN) {
+        set_errbuf(errbuf, errbuf_len, "query exceeds the maximum length in bytes", NULL);
+        return ML_ERR_VALIDATION;
+    }
+
+    if (strcmp(mode, "regex") == 0) {
+        return compile_pattern(in, case_sensitive, &out->pattern, errbuf, errbuf_len);
+    }
+    if (strcmp(mode, "natural") == 0) {
+        return split_terms(in, &out->terms, errbuf, errbuf_len);
+    }
+    return ML_OK;
+}
+
+void ml_free_search_query(ml_search_query *q)
+{
+    if (q->terms != NULL) {
+        for (size_t i = 0; q->terms[i] != NULL; i++) {
+            free(q->terms[i]);
+        }
+        free(q->terms);
+        q->terms = NULL;
+    }
+    if (q->pattern != NULL) {
+        regfree(q->pattern);
+        free(q->pattern);
+        q->pattern = NULL;
+    }
+}
+
+ml_status ml_validate_search_pagination(int limit, int offset, char *errbuf, size_t errbuf_len)
+{
+    if (limit < ML_MIN_SEARCH_LIMIT || limit > ML_MAX_SEARCH_LIMIT) {
+        set_errbuf(errbuf, errbuf_len, "limit must be between 1 and 500", NULL);
+        return ML_ERR_VALIDATION;
+    }
+    if (offset < 0) {
+        set_errbuf(errbuf, errbuf_len, "offset must be a non-negative integer", NULL);
+        return ML_ERR_VALIDATION;
+    }
     return ML_OK;
 }

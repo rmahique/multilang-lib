@@ -49,6 +49,23 @@ static const char *arg_str(const json_value *args, const char *key)
 }
 
 /*
+ * Maps cases.json's mode string to ml_search_mode. Falls back to a
+ * deliberately out-of-range enum value for anything else (including the
+ * "not-a-real-mode" fixture case) -- C's ml_search_data takes a typed
+ * enum, not a free-form string like the other four ports, so an
+ * out-of-range enum value is this API's equivalent of an invalid mode
+ * string; ml_search_data's own validation (see strings.c) rejects it the
+ * same way it would reject any other unrecognized ml_search_mode.
+ */
+static ml_search_mode parse_mode(const char *s)
+{
+    if (s != NULL && strcmp(s, "exact") == 0) return ML_SEARCH_EXACT;
+    if (s != NULL && strcmp(s, "regex") == 0) return ML_SEARCH_REGEX;
+    if (s != NULL && strcmp(s, "natural") == 0) return ML_SEARCH_NATURAL;
+    return (ml_search_mode) -1;
+}
+
+/*
  * Opens a connection with a guaranteed-empty `strings` table. SQLite gets
  * a brand-new temp file per case; Postgres/MySQL share one long-lived
  * server across the whole run, so each case truncates the table itself
@@ -114,6 +131,64 @@ static void run_case(const json_value *test_case, const char *backend)
         int expect_error = json_is_true(json_object_get(step, "expect_error"));
         const json_value *expect = json_object_get(step, "expect");
         int has_expect = expect != NULL;
+
+        if (strcmp(op, "search_data") == 0) {
+            ml_search_options opts = {0};
+            opts.language_id = arg_str(args, "language_id");
+            opts.context = arg_str(args, "context");
+            opts.status = arg_str(args, "status");
+            opts.case_sensitive = json_is_true(json_object_get(args, "case_sensitive"));
+            opts.limit = (int) json_as_int(json_object_get(args, "limit"), 0);
+            opts.offset = (int) json_as_int(json_object_get(args, "offset"), 0);
+
+            ml_search_mode mode = parse_mode(arg_str(args, "mode"));
+            ml_search_result *results = NULL;
+            size_t count = 0;
+            ml_status search_status = ml_search_data(conn, arg_str(args, "query"), mode, &opts,
+                                                       &results, &count, err, sizeof(err));
+
+            if (expect_error) {
+                if (search_status != ML_ERR_VALIDATION) {
+                    fprintf(stderr, "FAIL %s: op %s: expected ML_ERR_VALIDATION, got %d\n", name, op, search_status);
+                    failures++;
+                }
+                ml_free_search_results(results, count);
+                continue;
+            }
+            if (search_status != ML_OK) {
+                fprintf(stderr, "FAIL %s: op %s: unexpected error: %s\n", name, op, err);
+                failures++;
+                ml_free_search_results(results, count);
+                continue;
+            }
+            if (has_expect) {
+                /* search_data returns full rows, not a single
+                 * JSON-comparable value like retrieve_data --
+                 * cases.json's "expect" for this op is an array of
+                 * [language_id, string_id, context] triples, compared
+                 * directly against the result's own fields. See
+                 * docs/conformance.md. */
+                int mismatch = (count != json_array_size(expect));
+                for (size_t k = 0; !mismatch && k < count; k++) {
+                    const json_value *triple = json_array_get(expect, k);
+                    const char *want_lang = json_as_string(json_array_get(triple, 0), "");
+                    const char *want_sid = json_as_string(json_array_get(triple, 1), "");
+                    const char *want_ctx = json_as_string(json_array_get(triple, 2), "");
+                    if (strcmp(results[k].language_id, want_lang) != 0 ||
+                        strcmp(results[k].string_id, want_sid) != 0 ||
+                        strcmp(results[k].context, want_ctx) != 0) {
+                        mismatch = 1;
+                    }
+                }
+                if (mismatch) {
+                    fprintf(stderr, "FAIL %s: op %s: search_data result mismatch (got %zu rows, want %zu)\n",
+                            name, op, count, json_array_size(expect));
+                    failures++;
+                }
+            }
+            ml_free_search_results(results, count);
+            continue;
+        }
 
         ml_status status;
         char *content = NULL;

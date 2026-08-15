@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -72,11 +73,20 @@ func conformanceConn(t *testing.T, name string) Backend {
 }
 
 type conformanceOp struct {
-	Op          string                 `json:"op"`
-	Args        map[string]interface{} `json:"args"`
-	Expect      *string                `json:"expect"`
-	HasExpect   bool                   `json:"-"`
-	ExpectError bool                   `json:"expect_error"`
+	Op   string                 `json:"op"`
+	Args map[string]interface{} `json:"args"`
+
+	Expect    *string `json:"expect"`
+	HasExpect bool    `json:"-"`
+
+	// search_data returns full rows, not a single JSON-comparable value
+	// like retrieve_data -- cases.json's "expect" for that op is an
+	// array of [language_id, string_id, context] triples instead, so it
+	// decodes into ExpectRows rather than Expect. See docs/conformance.md.
+	ExpectRows    [][]string `json:"-"`
+	HasExpectRows bool       `json:"-"`
+
+	ExpectError bool `json:"expect_error"`
 }
 
 type conformanceCase struct {
@@ -119,10 +129,17 @@ func loadConformanceSuite(t *testing.T) conformanceSuite {
 		for _, ro := range rc.Operations {
 			op := conformanceOp{Op: ro.Op, Args: ro.Args, ExpectError: ro.ExpectError}
 			if ro.Expect != nil {
-				op.HasExpect = true
-				var s *string
-				_ = json.Unmarshal(ro.Expect, &s) // null -> nil, string -> pointer
-				op.Expect = s
+				if ro.Op == "search_data" {
+					op.HasExpectRows = true
+					var rows [][]string
+					_ = json.Unmarshal(ro.Expect, &rows)
+					op.ExpectRows = rows
+				} else {
+					op.HasExpect = true
+					var s *string
+					_ = json.Unmarshal(ro.Expect, &s) // null -> nil, string -> pointer
+					op.Expect = s
+				}
 			}
 			c.Operations = append(c.Operations, op)
 		}
@@ -139,6 +156,34 @@ func argString(args map[string]interface{}, key string) string {
 	return v.(string)
 }
 
+// argOptionalContext mirrors SearchOptions.Context's own convention:
+// nil means the key was absent/null in the fixture (no filter), a
+// non-nil pointer (including one to "") means it was given.
+func argOptionalContext(args map[string]interface{}, key string) *string {
+	v, ok := args[key]
+	if !ok || v == nil {
+		return nil
+	}
+	s := v.(string)
+	return &s
+}
+
+func argBool(args map[string]interface{}, key string, fallback bool) bool {
+	v, ok := args[key]
+	if !ok || v == nil {
+		return fallback
+	}
+	return v.(bool)
+}
+
+func argInt(args map[string]interface{}, key string, fallback int) int {
+	v, ok := args[key]
+	if !ok || v == nil {
+		return fallback
+	}
+	return int(v.(float64)) // encoding/json decodes JSON numbers as float64
+}
+
 func TestConformance(t *testing.T) {
 	suite := loadConformanceSuite(t)
 
@@ -150,6 +195,42 @@ func TestConformance(t *testing.T) {
 
 			for _, step := range c.Operations {
 				args := step.Args
+
+				if step.Op == "search_data" {
+					mode := SearchMode(argString(args, "mode"))
+					if mode == "" {
+						mode = SearchModeNatural
+					}
+					rows, err := SearchData(conn, argString(args, "query"), mode, SearchOptions{
+						LanguageID:    argString(args, "language_id"),
+						Context:       argOptionalContext(args, "context"),
+						Status:        argString(args, "status"),
+						CaseSensitive: argBool(args, "case_sensitive", false),
+						Limit:         argInt(args, "limit", 0),
+						Offset:        argInt(args, "offset", 0),
+					})
+
+					if step.ExpectError {
+						if _, ok := err.(*ValidationError); !ok {
+							t.Fatalf("op %s: expected ValidationError, got %v", step.Op, err)
+						}
+						continue
+					}
+					if err != nil {
+						t.Fatalf("op %s: unexpected error: %v", step.Op, err)
+					}
+					if step.HasExpectRows {
+						got := make([][]string, 0, len(rows))
+						for _, r := range rows {
+							got = append(got, []string{r.LanguageID, r.StringID, r.Context})
+						}
+						if !reflect.DeepEqual(got, step.ExpectRows) {
+							t.Fatalf("op %s: got %v, want %v", step.Op, got, step.ExpectRows)
+						}
+					}
+					continue
+				}
+
 				var opErr error
 				var result string
 				var found bool

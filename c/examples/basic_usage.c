@@ -95,6 +95,24 @@ int main(void)
     printf("%s\n", content); /* -> "Post" */
     free(content);
 
+    /* --- ml_search_data: find rows by content, not by exact key ------ */
+    must(ml_insert_data(conn, "welcome1", "en", "Welcome to our platform", NULL, errbuf, sizeof(errbuf)), errbuf);
+    must(ml_insert_data(conn, "welcome2", "en", "Welcome back, friend", NULL, errbuf, sizeof(errbuf)), errbuf);
+
+    ml_search_options search_opts = {0};
+    search_opts.language_id = "en";
+    ml_search_result *matches = NULL;
+    size_t match_count = 0;
+    must(ml_search_data(conn, "welcome", ML_SEARCH_NATURAL, &search_opts, &matches, &match_count, errbuf,
+                         sizeof(errbuf)),
+         errbuf);
+    for (size_t i = 0; i < match_count; i++) {
+        printf("%s -> %s\n", matches[i].string_id, matches[i].content);
+    }
+    /* -> welcome1 -> Welcome to our platform */
+    /* -> welcome2 -> Welcome back, friend */
+    ml_free_search_results(matches, match_count);
+
     /* --- retrieve on a row that doesn't exist: NULL, not an error ---- */
     must(ml_retrieve_data(conn, "greeting", "fr", NULL, &content, errbuf, sizeof(errbuf)), errbuf);
     printf("content is NULL: %s\n", content == NULL ? "true" : "false");

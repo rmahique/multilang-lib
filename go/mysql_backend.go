@@ -45,6 +45,11 @@ const mysqlSelect = `
 SELECT content FROM strings
 WHERE language_id = ? AND string_id = ? AND context = ?`
 
+const mysqlSelectRowsBase = `
+SELECT string_id, language_id, context, content, original_language,
+       status, source_checksum, updated_by, date_updated
+FROM strings`
+
 // MySQLBackend is the Backend implementation for MySQL/MariaDB.
 type MySQLBackend struct {
 	db *sql.DB
@@ -134,6 +139,36 @@ func (b *MySQLBackend) Upsert(row Row) error {
 		row.DateUpdated,
 	)
 	return err
+}
+
+// SelectRows returns every row matching whichever filters are given.
+func (b *MySQLBackend) SelectRows(languageID, status string, context *string) ([]Row, error) {
+	where, args := searchWhereClause(languageID, status, context, questionMarkPlaceholder)
+	query := mysqlSelectRowsBase
+	if where != "" {
+		query += " WHERE " + where
+	}
+
+	rows, err := b.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []Row
+	for rows.Next() {
+		var r Row
+		var originalLanguage, sourceChecksum, updatedBy sql.NullString
+		if err := rows.Scan(&r.StringID, &r.LanguageID, &r.Context, &r.Content,
+			&originalLanguage, &r.Status, &sourceChecksum, &updatedBy, &r.DateUpdated); err != nil {
+			return nil, err
+		}
+		r.OriginalLanguage = originalLanguage.String
+		r.SourceChecksum = sourceChecksum.String
+		r.UpdatedBy = updatedBy.String
+		result = append(result, r)
+	}
+	return result, rows.Err()
 }
 
 // Close closes the underlying connection.

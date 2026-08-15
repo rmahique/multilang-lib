@@ -20,7 +20,7 @@ environment variables. Copied verbatim from
 import os
 import tempfile
 
-from multilang import db_connector, retrieve_data, insert_data, ValidationError
+from multilang import db_connector, retrieve_data, insert_data, search_data, ValidationError
 
 
 def main():
@@ -54,6 +54,14 @@ def main():
 
     print(retrieve_data(conn, "post", "en", context="button.publish"))  # -> "Publish"
     print(retrieve_data(conn, "post", "en", context="menu.item"))       # -> "Post"
+
+    # --- search_data: find rows by content, not by exact key ------------
+    insert_data(conn, "welcome1", "en", "Welcome to our platform")
+    insert_data(conn, "welcome2", "en", "Welcome back, friend")
+    for row in search_data(conn, "welcome", mode="natural", language_id="en"):
+        print(row["string_id"], "->", row["content"])
+    # -> welcome1 -> Welcome to our platform
+    # -> welcome2 -> Welcome back, friend
 
     # --- retrieve_data on a row that doesn't exist: None, not an error --
     print(retrieve_data(conn, "greeting", "fr"))  # -> None

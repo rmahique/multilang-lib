@@ -1,5 +1,5 @@
 {
-  "description": "Language-agnostic conformance suite. Every port (python, php, C/C++, go, javascript) must pass every case here against every backend it supports (sqlite, postgres, mysql). Each case is a sequence of operations executed in order against a single fresh connection/table; 'expect' is the exact return value of retrieve_data (null means no row found); 'expect_error' means the operation must raise/return the language's equivalent of ValidationError instead of succeeding.",
+  "description": "Language-agnostic conformance suite. Every port (python, php, C/C++, go, javascript) must pass every case here against every backend it supports (sqlite, postgres, mysql). Each case is a sequence of operations executed in order against a single fresh connection/table; 'expect' is the exact return value of retrieve_data (null means no row found), or for search_data an array of [language_id, string_id, context] triples in the exact order search_data must return them (see each runner's SEARCH_OPS projection); 'expect_error' means the operation must raise/return the language's equivalent of ValidationError instead of succeeding.",
   "cases": [
     {
       "name": "basic_insert_retrieve",
@@ -1192,6 +1192,192 @@
             "content": "not allowed as a context value",
             "context": "挨拶"
           },
+          "expect_error": true
+        }
+      ]
+    },
+    {
+      "name": "search_exact_case_insensitive_match",
+      "operations": [
+        {
+          "op": "insert_data",
+          "args": {"string_id": "greeting1", "language_id": "en", "content": "Hello World"}
+        },
+        {
+          "op": "insert_data",
+          "args": {"string_id": "greeting2", "language_id": "en", "content": "Goodbye"}
+        },
+        {
+          "op": "search_data",
+          "args": {"query": "hello", "mode": "exact", "language_id": "en"},
+          "expect": [["en", "greeting1", ""]]
+        }
+      ]
+    },
+    {
+      "name": "search_exact_case_sensitive_misses_different_case",
+      "operations": [
+        {
+          "op": "insert_data",
+          "args": {"string_id": "greeting1", "language_id": "en", "content": "Hello World"}
+        },
+        {
+          "op": "search_data",
+          "args": {"query": "hello", "mode": "exact", "language_id": "en", "case_sensitive": true},
+          "expect": []
+        }
+      ]
+    },
+    {
+      "name": "search_regex_basic_pattern",
+      "operations": [
+        {
+          "op": "insert_data",
+          "args": {"string_id": "animal1", "language_id": "en", "content": "cat"}
+        },
+        {
+          "op": "insert_data",
+          "args": {"string_id": "animal2", "language_id": "en", "content": "dog"}
+        },
+        {
+          "op": "insert_data",
+          "args": {"string_id": "animal3", "language_id": "en", "content": "catalog"}
+        },
+        {
+          "op": "search_data",
+          "args": {"query": "^cat", "mode": "regex", "language_id": "en"},
+          "expect": [["en", "animal1", ""], ["en", "animal3", ""]]
+        }
+      ]
+    },
+    {
+      "name": "search_natural_all_terms_required",
+      "operations": [
+        {
+          "op": "insert_data",
+          "args": {"string_id": "s1", "language_id": "en", "content": "the quick brown fox"}
+        },
+        {
+          "op": "insert_data",
+          "args": {"string_id": "s2", "language_id": "en", "content": "the quick fox"}
+        },
+        {
+          "op": "search_data",
+          "args": {"query": "quick brown", "mode": "natural", "language_id": "en"},
+          "expect": [["en", "s1", ""]]
+        }
+      ]
+    },
+    {
+      "name": "search_natural_relevance_ordering",
+      "operations": [
+        {
+          "op": "insert_data",
+          "args": {"string_id": "s1", "language_id": "en", "content": "apple apple apple"}
+        },
+        {
+          "op": "insert_data",
+          "args": {"string_id": "s2", "language_id": "en", "content": "apple"}
+        },
+        {
+          "op": "search_data",
+          "args": {"query": "apple", "mode": "natural", "language_id": "en"},
+          "expect": [["en", "s1", ""], ["en", "s2", ""]]
+        }
+      ]
+    },
+    {
+      "name": "search_score_tie_deterministic_order",
+      "operations": [
+        {
+          "op": "insert_data",
+          "args": {"string_id": "zeta", "language_id": "en", "content": "match once"}
+        },
+        {
+          "op": "insert_data",
+          "args": {"string_id": "alpha", "language_id": "en", "content": "match once"}
+        },
+        {
+          "op": "search_data",
+          "args": {"query": "match", "mode": "exact", "language_id": "en"},
+          "expect": [["en", "alpha", ""], ["en", "zeta", ""]]
+        }
+      ]
+    },
+    {
+      "name": "search_filters_language_and_status",
+      "operations": [
+        {
+          "op": "insert_data",
+          "args": {"string_id": "s1", "language_id": "en", "content": "shared text", "status": "published"}
+        },
+        {
+          "op": "insert_data",
+          "args": {"string_id": "s2", "language_id": "en", "content": "shared text", "status": "draft"}
+        },
+        {
+          "op": "insert_data",
+          "args": {"string_id": "s3", "language_id": "es", "content": "shared text", "status": "published"}
+        },
+        {
+          "op": "search_data",
+          "args": {"query": "shared", "mode": "exact", "language_id": "en", "status": "published"},
+          "expect": [["en", "s1", ""]]
+        }
+      ]
+    },
+    {
+      "name": "search_pagination_limit_offset",
+      "operations": [
+        {
+          "op": "insert_data",
+          "args": {"string_id": "a", "language_id": "en", "content": "match match match"}
+        },
+        {
+          "op": "insert_data",
+          "args": {"string_id": "b", "language_id": "en", "content": "match match"}
+        },
+        {
+          "op": "insert_data",
+          "args": {"string_id": "c", "language_id": "en", "content": "match"}
+        },
+        {
+          "op": "search_data",
+          "args": {"query": "match", "mode": "exact", "language_id": "en", "limit": 1, "offset": 1},
+          "expect": [["en", "b", ""]]
+        }
+      ]
+    },
+    {
+      "name": "search_no_matches_returns_empty",
+      "operations": [
+        {
+          "op": "insert_data",
+          "args": {"string_id": "s1", "language_id": "en", "content": "hello"}
+        },
+        {
+          "op": "search_data",
+          "args": {"query": "xyz-not-present", "mode": "exact", "language_id": "en"},
+          "expect": []
+        }
+      ]
+    },
+    {
+      "name": "search_invalid_mode_rejected",
+      "operations": [
+        {
+          "op": "search_data",
+          "args": {"query": "hello", "mode": "not-a-real-mode"},
+          "expect_error": true
+        }
+      ]
+    },
+    {
+      "name": "search_invalid_regex_rejected",
+      "operations": [
+        {
+          "op": "search_data",
+          "args": {"query": "(unclosed", "mode": "regex"},
           "expect_error": true
         }
       ]

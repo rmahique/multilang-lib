@@ -81,6 +81,30 @@ final class ConformanceTest extends TestCase
         if ($op === 'retrieve_data') {
             return Strings::retrieveData($conn, $args['string_id'], $args['language_id'], $args['context'] ?? '');
         }
+        if ($op === 'search_data') {
+            // search_data returns full rows, not a single JSON-comparable
+            // value like retrieve_data -- cases.json's "expect" for this
+            // op is an array of [language_id, string_id, context]
+            // triples, so the result is projected down to that same
+            // shape here (rather than in testConformanceCase) so the
+            // generic assertSame($step['expect'], $result) below needs
+            // no per-op special-casing. See docs/conformance.md.
+            $rows = Strings::searchData(
+                $conn,
+                $args['query'],
+                $args['mode'] ?? 'natural',
+                $args['language_id'] ?? null,
+                $args['context'] ?? null,
+                $args['status'] ?? null,
+                $args['case_sensitive'] ?? false,
+                $args['limit'] ?? 50,
+                $args['offset'] ?? 0
+            );
+            return array_map(
+                static fn (array $row) => [$row['language_id'], $row['string_id'], $row['context']],
+                $rows
+            );
+        }
         return Strings::insertData(
             $conn,
             $args['string_id'],

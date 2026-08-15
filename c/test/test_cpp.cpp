@@ -171,6 +171,69 @@ static void run_conformance()
             auto arg = [&](const char *key) -> std::string {
                 return json_as_string(json_object_get(args, key), "");
             };
+            auto arg_opt = [&](const char *key) -> std::optional<std::string> {
+                const json_value *v = json_object_get(args, key);
+                if (v == nullptr || json_is_null(v)) {
+                    return std::nullopt;
+                }
+                return std::string(json_as_string(v, ""));
+            };
+
+            if (op == "search_data") {
+                std::string mode_str = arg("mode");
+                if (mode_str != "exact" && mode_str != "natural" && mode_str != "regex") {
+                    // multilang::SearchMode is a scoped enum with exactly
+                    // three valid values -- unlike the other four ports'
+                    // free-form mode string, there is no way to construct
+                    // an invalid one through normal use of this wrapper.
+                    // The "invalid mode string" fixture case has no
+                    // representable equivalent here, so it's skipped
+                    // rather than forced through an unsafe cast just to
+                    // exercise something the type system already
+                    // prevents (see the plain C runner, whose untyped
+                    // ml_search_mode enum can and does exercise this).
+                    continue;
+                }
+                multilang::SearchMode mode = mode_str == "exact"   ? multilang::SearchMode::Exact
+                                              : mode_str == "regex" ? multilang::SearchMode::Regex
+                                                                     : multilang::SearchMode::Natural;
+
+                multilang::SearchOptions opts;
+                opts.language_id = arg("language_id");
+                opts.context = arg_opt("context");
+                opts.status = arg("status");
+                opts.case_sensitive = json_is_true(json_object_get(args, "case_sensitive"));
+                opts.limit = static_cast<int>(json_as_int(json_object_get(args, "limit"), 0));
+                opts.offset = static_cast<int>(json_as_int(json_object_get(args, "offset"), 0));
+
+                try {
+                    auto results = conn.search_data(arg("query"), mode, opts);
+                    CHECK(!expect_error, (name + ": expected an error but none was thrown").c_str());
+                    if (!expect_error && expect != nullptr) {
+                        // search_data returns full rows, not a single
+                        // JSON-comparable value like retrieve_data --
+                        // cases.json's "expect" for this op is an array
+                        // of [language_id, string_id, context] triples,
+                        // compared directly against the result's own
+                        // fields. See docs/conformance.md.
+                        bool mismatch = (results.size() != json_array_size(expect));
+                        for (size_t k = 0; !mismatch && k < results.size(); k++) {
+                            const json_value *triple = json_array_get(expect, k);
+                            std::string want_lang = json_as_string(json_array_get(triple, 0), "");
+                            std::string want_sid = json_as_string(json_array_get(triple, 1), "");
+                            std::string want_ctx = json_as_string(json_array_get(triple, 2), "");
+                            if (results[k].language_id != want_lang || results[k].string_id != want_sid ||
+                                results[k].context != want_ctx) {
+                                mismatch = true;
+                            }
+                        }
+                        CHECK(!mismatch, (name + ": search_data result mismatch").c_str());
+                    }
+                } catch (const ValidationError &) {
+                    CHECK(expect_error, (name + ": unexpected ValidationError").c_str());
+                }
+                continue;
+            }
 
             try {
                 if (op == "retrieve_data") {

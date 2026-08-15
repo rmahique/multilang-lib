@@ -22,6 +22,7 @@
 #ifndef MULTILANG_VALIDATION_H
 #define MULTILANG_VALIDATION_H
 
+#include <regex.h>
 #include <stddef.h>
 #include "../include/multilang.h"
 
@@ -63,5 +64,36 @@ ml_status ml_validate_status(const char *in, char *errbuf, size_t errbuf_len);
  */
 ml_status ml_validate_updated_by(const char *in, char *out, size_t out_size,
                                   char *errbuf, size_t errbuf_len);
+
+/* Validate that `in` is one of "exact"/"natural"/"regex". */
+ml_status ml_validate_search_mode(const char *in, char *errbuf, size_t errbuf_len);
+
+/*
+ * ml_search_data's pre-processed query, produced by
+ * ml_validate_search_query and released by ml_free_search_query. Exactly
+ * one field is populated, matching mode: "exact" -> neither ("in" itself
+ * is the needle), "natural" -> terms (a NULL-terminated array of
+ * malloc'd term strings), "regex" -> pattern (a malloc'd, already-
+ * compiled POSIX extended regex, case-insensitivity already baked in via
+ * REG_ICASE if requested).
+ */
+typedef struct {
+    char **terms;
+    regex_t *pattern;
+} ml_search_query;
+
+/*
+ * Validate a search_data query and pre-process it into the form the
+ * matcher for `mode` actually needs, so ml_search_data doesn't re-derive
+ * it per row. Writes into *out (terms/pattern start NULL either way).
+ */
+ml_status ml_validate_search_query(const char *in, const char *mode, int case_sensitive,
+                                    ml_search_query *out, char *errbuf, size_t errbuf_len);
+
+/* Releases whatever ml_validate_search_query allocated into *q. */
+void ml_free_search_query(ml_search_query *q);
+
+/* Validate ml_search_data's limit/offset. */
+ml_status ml_validate_search_pagination(int limit, int offset, char *errbuf, size_t errbuf_len);
 
 #endif /* MULTILANG_VALIDATION_H */

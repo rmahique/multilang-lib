@@ -139,3 +139,21 @@ ml_status ml_backend_truncate(ml_backend *conn, char *errbuf, size_t errbuf_len)
 {
     return conn->vtable->truncate(conn->ctx, errbuf, errbuf_len);
 }
+
+void ml_backend_free_rows(ml_backend_row *rows, size_t count)
+{
+    if (rows == NULL) {
+        return;
+    }
+    for (size_t i = 0; i < count; i++) {
+        free(rows[i].string_id);
+        free(rows[i].language_id);
+        free(rows[i].context);
+        free(rows[i].content);
+        free(rows[i].original_language);
+        free(rows[i].status);
+        free(rows[i].source_checksum);
+        free(rows[i].updated_by);
+    }
+    free(rows);
+}

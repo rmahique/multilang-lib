@@ -132,6 +132,95 @@ static ml_status sqlite_upsert(void *ctx, const ml_row *row, char *errbuf, size_
     return status;
 }
 
+/* Parses "%Y-%m-%dT%H:%M:%SZ" (the exact format sqlite_upsert writes)
+ * back into a UTC time_t, without relying on strptime()/timegm() -- both
+ * are BSD/glibc extensions not guaranteed visible under this project's
+ * strict -D_POSIX_C_SOURCE=200809L build flags (see c/Makefile). The
+ * day-count math is Howard Hinnant's days_from_civil algorithm: a
+ * standard, allocation-free proleptic-Gregorian date -> days-since-epoch
+ * conversion. */
+static time_t parse_utc_timestamp(const char *text)
+{
+    int year, mon, day, hour, min, sec;
+    sscanf(text, "%d-%d-%dT%d:%d:%dZ", &year, &mon, &day, &hour, &min, &sec);
+
+    int y = year - (mon <= 2);
+    long era = (y >= 0 ? y : y - 399) / 400;
+    unsigned yoe = (unsigned) (y - era * 400);
+    unsigned doy = (unsigned) ((153 * (mon + (mon > 2 ? -3 : 9)) + 2) / 5 + day - 1);
+    unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    long days = era * 146097L + (long) doe - 719468L;
+
+    return (time_t) days * 86400 + hour * 3600 + min * 60 + sec;
+}
+
+static ml_status sqlite_select_rows(void *ctx, const char *language_id, const char *context,
+                                     const char *status, ml_backend_row **out_rows, size_t *out_count,
+                                     char *errbuf, size_t errbuf_len)
+{
+    sqlite3 *db = (sqlite3 *) ctx;
+
+    char sql[512] =
+        "SELECT string_id, language_id, context, content, original_language, "
+        "status, source_checksum, updated_by, date_updated FROM strings";
+    int n = 0;
+    if (language_id != NULL) {
+        strcat(sql, n++ == 0 ? " WHERE language_id = ?" : " AND language_id = ?");
+    }
+    if (context != NULL) {
+        strcat(sql, n++ == 0 ? " WHERE context = ?" : " AND context = ?");
+    }
+    if (status != NULL) {
+        strcat(sql, n++ == 0 ? " WHERE status = ?" : " AND status = ?");
+    }
+
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        set_errbuf(errbuf, errbuf_len, sqlite3_errmsg(db));
+        return ML_ERR_DB;
+    }
+    int idx = 1;
+    if (language_id != NULL) sqlite3_bind_text(stmt, idx++, language_id, -1, SQLITE_TRANSIENT);
+    if (context != NULL) sqlite3_bind_text(stmt, idx++, context, -1, SQLITE_TRANSIENT);
+    if (status != NULL) sqlite3_bind_text(stmt, idx++, status, -1, SQLITE_TRANSIENT);
+
+    size_t capacity = 8, count = 0;
+    ml_backend_row *rows = malloc(capacity * sizeof(ml_backend_row));
+
+    int rc;
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        if (count >= capacity) {
+            capacity *= 2;
+            rows = realloc(rows, capacity * sizeof(ml_backend_row));
+        }
+        ml_backend_row *r = &rows[count++];
+        r->string_id = strdup((const char *) sqlite3_column_text(stmt, 0));
+        r->language_id = strdup((const char *) sqlite3_column_text(stmt, 1));
+        r->context = strdup((const char *) sqlite3_column_text(stmt, 2));
+        r->content = strdup((const char *) sqlite3_column_text(stmt, 3));
+        const unsigned char *ol = sqlite3_column_text(stmt, 4);
+        r->original_language = ol ? strdup((const char *) ol) : NULL;
+        r->status = strdup((const char *) sqlite3_column_text(stmt, 5));
+        const unsigned char *sc = sqlite3_column_text(stmt, 6);
+        r->source_checksum = sc ? strdup((const char *) sc) : NULL;
+        const unsigned char *ub = sqlite3_column_text(stmt, 7);
+        r->updated_by = ub ? strdup((const char *) ub) : NULL;
+        r->date_updated = parse_utc_timestamp((const char *) sqlite3_column_text(stmt, 8));
+    }
+
+    if (rc != SQLITE_DONE) {
+        set_errbuf(errbuf, errbuf_len, sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        ml_backend_free_rows(rows, count);
+        return ML_ERR_DB;
+    }
+    sqlite3_finalize(stmt);
+
+    *out_rows = rows;
+    *out_count = count;
+    return ML_OK;
+}
+
 static ml_status sqlite_truncate(void *ctx, char *errbuf, size_t errbuf_len)
 {
     sqlite3 *db = (sqlite3 *) ctx;
@@ -155,6 +244,7 @@ static const ml_backend_vtable SQLITE_VTABLE = {
     .ensure_schema = sqlite_ensure_schema,
     .select_content = sqlite_select_content,
     .upsert = sqlite_upsert,
+    .select_rows = sqlite_select_rows,
     .truncate = sqlite_truncate,
     .close = sqlite_close,
 };

@@ -91,7 +91,10 @@ in `retrieve_data` currently filters by status — it's stored so that a
 caller building a review workflow on top of this library has somewhere
 to put that state without inventing a second table. Kept intentionally
 small (three fixed values, allow-listed) rather than modeling a general
-workflow engine.
+workflow engine. `search_data` (see [`search.md`](search.md)) can filter
+by `status`, so a review-queue caller can ask for e.g. only `draft` rows
+matching a query — but it still doesn't interpret the value beyond an
+exact-match filter.
 
 ## Field length limits, and why they're measured the way they are
 

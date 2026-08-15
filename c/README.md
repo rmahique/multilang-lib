@@ -54,6 +54,13 @@ char *content = NULL;
 ml_retrieve_data(conn, "greeting", "en", NULL, &content, err, sizeof(err));
 /* content == "Hello world"; free(content) when done */
 
+ml_search_options search_opts = {0};
+search_opts.language_id = "en";
+ml_search_result *results = NULL;
+size_t result_count = 0;
+ml_search_data(conn, "hello", ML_SEARCH_EXACT, &search_opts, &results, &result_count, err, sizeof(err));
+/* results[0].content == "Hello world"; ml_free_search_results(results, result_count) when done */
+
 ml_close(conn);
 ```
 
@@ -69,7 +76,17 @@ multilang::Connection conn("sqlite", creds);
 conn.insert_data("greeting", "en", "Hello world");
 auto content = conn.retrieve_data("greeting", "en");
 // content == std::optional<std::string>("Hello world")
+
+multilang::SearchOptions search_opts;
+search_opts.language_id = "en";
+auto results = conn.search_data("hello", multilang::SearchMode::Exact, search_opts);
+// results[0].content == "Hello world"
 ```
+
+`ml_search_data`/`search_data` also support natural-language (default;
+every whitespace-split term must appear) and regex (POSIX extended
+regular expressions via `<regex.h>`) modes — see
+[`../docs/search.md`](../docs/search.md).
 
 ## Credentials
 

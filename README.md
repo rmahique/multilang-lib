@@ -22,10 +22,19 @@ insert_data(conn, "greeting", "es", "Hola mundo", original_language="en")
 retrieve_data(conn, "greeting", "es")  # -> "Hola mundo"
 ```
 
-Every port exposes the same three functions and the same behavior:
+Every port exposes the same four functions and the same behavior:
 `db_connector` (open a connection), `insert_data` (upsert one string),
-`retrieve_data` (fetch one string, content only). See
-[`docs/`](docs/) for how and why, and each language directory's own
+`retrieve_data` (fetch one string, content only), and `search_data`
+(find rows by content — regex, natural-language, or exact-substring
+matching, run in-process so results are identical across every backend;
+see [`docs/search.md`](docs/search.md)):
+
+```python
+search_data(conn, "welcome", mode="natural", language_id="en")
+# -> [{"string_id": "greeting", "language_id": "en", "context": "", "content": "Welcome back!", ...}]
+```
+
+See [`docs/`](docs/) for how and why, and each language directory's own
 `README.md` for that port's specific usage.
 
 ## Layout

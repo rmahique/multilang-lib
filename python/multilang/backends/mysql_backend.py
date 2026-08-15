@@ -43,6 +43,12 @@ SELECT content FROM strings
 WHERE language_id = %s AND string_id = %s AND context = %s
 """
 
+_SELECT_ROWS = """
+SELECT string_id, language_id, context, content, original_language,
+       status, source_checksum, updated_by, date_updated
+FROM strings
+"""
+
 
 class MySQLBackend(Backend):
     """Backend implementation for MySQL/MariaDB, via PyMySQL."""
@@ -128,6 +134,42 @@ class MySQLBackend(Backend):
                 ),
             )
         self._conn.commit()
+
+    def select_rows(self, language_id=None, context=None, status=None):
+        """Return every row matching whichever filters are not None."""
+        clauses = []
+        params = []
+        if language_id is not None:
+            clauses.append("language_id = %s")
+            params.append(language_id)
+        if context is not None:
+            clauses.append("context = %s")
+            params.append(context)
+        if status is not None:
+            clauses.append("status = %s")
+            params.append(status)
+
+        sql = _SELECT_ROWS
+        if clauses:
+            sql += "WHERE " + " AND ".join(clauses)
+
+        with self._conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+        return [
+            {
+                "string_id": r[0],
+                "language_id": r[1],
+                "context": r[2],
+                "content": r[3],
+                "original_language": r[4],
+                "status": r[5],
+                "source_checksum": r[6],
+                "updated_by": r[7],
+                "date_updated": r[8],
+            }
+            for r in rows
+        ]
 
     def close(self):
         """Close the underlying connection."""

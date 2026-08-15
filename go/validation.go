@@ -35,6 +35,15 @@ const (
 
 var validStatuses = map[string]bool{"draft": true, "reviewed": true, "published": true}
 
+// search_data limits — see docs/search.md for the rationale behind these
+// specific numbers and the exact/natural/regex semantics.
+const (
+	MaxSearchQueryLen  = 500
+	MinSearchLimit     = 1
+	MaxSearchLimit     = 500
+	DefaultSearchLimit = 50
+)
+
 // Simplified BCP 47: primary language (2-3 letters) + optional script
 // (4 letters) + optional region (2 letters or 3 digits) + optional
 // variants. Covers the vast majority of real-world tags: en, es, pt-BR,
@@ -180,4 +189,69 @@ func ValidateUpdatedBy(value string) (string, error) {
 		return "", newValidationError("updated_by exceeds %d characters", MaxUpdatedByLen)
 	}
 	return value, nil
+}
+
+var validSearchModes = map[SearchMode]bool{
+	SearchModeExact: true, SearchModeNatural: true, SearchModeRegex: true,
+}
+
+// ValidateSearchMode validates that mode is one of SearchData's three
+// modes.
+func ValidateSearchMode(mode SearchMode) (SearchMode, error) {
+	if !validSearchModes[mode] {
+		return "", newValidationError("mode must be one of [exact, natural, regex] — got %q", mode)
+	}
+	return mode, nil
+}
+
+// ValidateSearchQuery validates a SearchData query and pre-processes it
+// into the form the matcher for mode actually needs, so SearchData
+// doesn't re-derive it per row.
+//
+// Exactly one of the two extra return values is populated: terms for
+// "natural" (non-empty, whitespace-split), pattern for "regex" (compiled
+// with case-insensitivity baked in via caseSensitive); both are nil for
+// "exact".
+func ValidateSearchQuery(value string, mode SearchMode, caseSensitive bool) (query string, terms []string, pattern *regexp.Regexp, err error) {
+	if value == "" {
+		return "", nil, nil, newValidationError("query must be a non-empty string")
+	}
+	if len(value) > MaxSearchQueryLen {
+		return "", nil, nil, newValidationError("query exceeds %d bytes", MaxSearchQueryLen)
+	}
+	if strings.ContainsRune(value, '\x00') {
+		return "", nil, nil, newValidationError("query must not contain NUL bytes")
+	}
+
+	switch mode {
+	case SearchModeRegex:
+		pat := value
+		if !caseSensitive {
+			pat = "(?i)" + pat
+		}
+		re, compileErr := regexp.Compile(pat)
+		if compileErr != nil {
+			return "", nil, nil, newValidationError("query is not a valid regex: %s", compileErr)
+		}
+		return value, nil, re, nil
+	case SearchModeNatural:
+		fields := strings.Fields(value)
+		if len(fields) == 0 {
+			return "", nil, nil, newValidationError("query must contain at least one term in natural mode")
+		}
+		return value, fields, nil, nil
+	default:
+		return value, nil, nil, nil
+	}
+}
+
+// ValidateSearchPagination validates SearchData's limit/offset.
+func ValidateSearchPagination(limit, offset int) (int, int, error) {
+	if limit < MinSearchLimit || limit > MaxSearchLimit {
+		return 0, 0, newValidationError("limit must be between %d and %d — got %d", MinSearchLimit, MaxSearchLimit, limit)
+	}
+	if offset < 0 {
+		return 0, 0, newValidationError("offset must be a non-negative integer — got %d", offset)
+	}
+	return limit, offset, nil
 }

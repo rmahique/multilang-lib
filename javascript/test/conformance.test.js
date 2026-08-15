@@ -20,12 +20,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { dbConnector, retrieveData, insertData, ValidationError } = require('../src/index');
+const { dbConnector, retrieveData, insertData, searchData, ValidationError } = require('../src/index');
 
 const casesPath = path.join(__dirname, '..', '..', 'conformance', 'cases.json');
 const suite = JSON.parse(fs.readFileSync(casesPath, 'utf8'));
 
-const OPS = { retrieve_data: retrieveData, insert_data: insertData };
+const OPS = { retrieve_data: retrieveData, insert_data: insertData, search_data: searchData };
 const BACKEND = process.env.MULTILANG_DB_BACKEND || 'sqlite';
 
 // conformance/cases.json uses Python-style snake_case argument names
@@ -35,6 +35,21 @@ const BACKEND = process.env.MULTILANG_DB_BACKEND || 'sqlite';
 function callOp(fn, conn, args) {
   if (fn === retrieveData) {
     return fn(conn, args.string_id, args.language_id, args.context ?? '');
+  }
+  if (fn === searchData) {
+    // search_data returns full rows, not a single JSON-comparable value
+    // like retrieve_data -- cases.json's "expect" for this op is an
+    // array of [language_id, string_id, context] triples, so the result
+    // is projected down to that same shape here. See docs/conformance.md.
+    return fn(conn, args.query, {
+      mode: args.mode,
+      languageId: args.language_id ?? null,
+      context: args.context ?? null,
+      status: args.status ?? null,
+      caseSensitive: args.case_sensitive ?? false,
+      limit: args.limit ?? 50,
+      offset: args.offset ?? 0,
+    }).then((rows) => rows.map((r) => [r.language_id, r.string_id, r.context]));
   }
   return fn(conn, args.string_id, args.language_id, args.content, {
     context: args.context,
@@ -82,7 +97,7 @@ for (const testCase of suite.cases) {
         }
         const result = await callOp(fn, conn, step.args);
         if ('expect' in step) {
-          assert.equal(result, step.expect);
+          assert.deepStrictEqual(result, step.expect);
         }
       }
     } finally {

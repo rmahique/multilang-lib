@@ -38,7 +38,14 @@ multilang.InsertData(conn, "greeting", "es", "Hola mundo", multilang.InsertOptio
 
 content, found, err := multilang.RetrieveData(conn, "greeting", "es", "")
 // content == "Hola mundo", found == true
+
+matches, err := multilang.SearchData(conn, "hola", multilang.SearchModeExact, multilang.SearchOptions{LanguageID: "es"})
+// matches[0].StringID == "greeting", matches[0].Content == "Hola mundo"
 ```
+
+`SearchData` also supports `SearchModeNatural` (whitespace-split terms,
+every one required) and `SearchModeRegex` (Go `regexp`/RE2 syntax) — see
+[`../docs/search.md`](../docs/search.md).
 
 ## Credentials
 

@@ -1,7 +1,8 @@
 /*
  * A minimal JSON reader, scoped to what the conformance test needs:
- * objects, arrays, strings, null, and true/false. No numbers, since
- * conformance/cases.json doesn't use any.
+ * objects, arrays, strings, null, true/false, and plain (non-fractional,
+ * non-exponential) integers -- the only numeric shape
+ * conformance/cases.json ever uses (search_data's limit/offset).
  *
  * This is test-only tooling (not part of the shipped library) written
  * specifically for this one fixed, controlled file, rather than vendoring
@@ -21,6 +22,7 @@ extern "C" {
 typedef enum {
     JSON_NULL,
     JSON_BOOL,
+    JSON_NUMBER,
     JSON_STRING,
     JSON_ARRAY,
     JSON_OBJECT,
@@ -32,6 +34,7 @@ struct json_value {
     json_type type;
     union {
         int boolean;
+        long number;
         char *string;
         struct {
             json_value **items;
@@ -58,6 +61,9 @@ size_t json_array_size(const json_value *arr);
 
 /* Returns v->as.string if v is a JSON_STRING, else `fallback`. */
 const char *json_as_string(const json_value *v, const char *fallback);
+
+/* Returns v->as.number if v is a JSON_NUMBER, else `fallback`. */
+long json_as_int(const json_value *v, long fallback);
 
 int json_is_null(const json_value *v);
 int json_is_true(const json_value *v);

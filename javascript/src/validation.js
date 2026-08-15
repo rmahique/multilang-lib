@@ -28,6 +28,14 @@ const MAX_LANGUAGE_ID_LEN = 35;
 
 const VALID_STATUSES = new Set(['draft', 'reviewed', 'published']);
 
+// searchData limits — see docs/search.md for the rationale behind these
+// specific numbers and the exact/natural/regex semantics.
+const MAX_SEARCH_QUERY_LEN = 500;
+const MIN_SEARCH_LIMIT = 1;
+const MAX_SEARCH_LIMIT = 500;
+const DEFAULT_SEARCH_LIMIT = 50;
+const VALID_SEARCH_MODES = new Set(['exact', 'natural', 'regex']);
+
 // Simplified BCP 47: primary language (2-3 letters) + optional script
 // (4 letters) + optional region (2 letters or 3 digits) + optional variants.
 // Covers the vast majority of real-world tags: en, es, pt-BR, zh-Hans,
@@ -229,6 +237,93 @@ function validateUpdatedBy(value) {
   return value;
 }
 
+/**
+ * Validate that `value` is one of searchData's three modes.
+ *
+ * @param {*} value The candidate mode.
+ * @returns {string} `value` unchanged.
+ * @throws {ValidationError} If not one of exact/natural/regex.
+ */
+function validateSearchMode(value) {
+  if (!VALID_SEARCH_MODES.has(value)) {
+    throw new ValidationError(
+      `mode must be one of ${[...VALID_SEARCH_MODES]} — got ${JSON.stringify(value)}`
+    );
+  }
+  return value;
+}
+
+/**
+ * Validate a searchData query and pre-process it into the form the
+ * matcher for `mode` actually needs, so searchData doesn't re-derive it
+ * per row.
+ *
+ * @param {*} value The candidate query string.
+ * @param {string} mode One of "exact"/"natural"/"regex" (already validated).
+ * @param {boolean} caseSensitive Whether matching should be
+ *   case-sensitive — baked into the compiled pattern for "regex" (the
+ *   `i` flag), otherwise applied by the caller at match time.
+ * @returns {{query: string, terms: string[]|null, pattern: RegExp|null}}
+ *   terms is a non-empty whitespace-split array for "natural", pattern is
+ *   a compiled RegExp for "regex"; both null otherwise.
+ * @throws {ValidationError} If value is empty/too long/contains NUL, if
+ *   mode="natural" and value has no non-whitespace terms, or if
+ *   mode="regex" and value fails to compile.
+ */
+function validateSearchQuery(value, mode, caseSensitive) {
+  if (typeof value !== 'string' || value === '') {
+    throw new ValidationError('query must be a non-empty string');
+  }
+  if (Buffer.byteLength(value, 'utf8') > MAX_SEARCH_QUERY_LEN) {
+    throw new ValidationError(`query exceeds ${MAX_SEARCH_QUERY_LEN} bytes`);
+  }
+  if (value.includes('\x00')) {
+    throw new ValidationError('query must not contain NUL bytes');
+  }
+
+  if (mode === 'regex') {
+    let pattern;
+    try {
+      pattern = new RegExp(value, caseSensitive ? '' : 'i');
+    } catch (err) {
+      throw new ValidationError(`query is not a valid regex: ${err.message}`);
+    }
+    return { query: value, terms: null, pattern };
+  }
+
+  if (mode === 'natural') {
+    const terms = value.split(/\s+/).filter((t) => t !== '');
+    if (terms.length === 0) {
+      throw new ValidationError('query must contain at least one term in natural mode');
+    }
+    return { query: value, terms, pattern: null };
+  }
+
+  return { query: value, terms: null, pattern: null };
+}
+
+/**
+ * Validate searchData's limit/offset.
+ *
+ * @param {*} limit Candidate max rows to return.
+ * @param {*} offset Candidate rows to skip.
+ * @returns {{limit: number, offset: number}}
+ * @throws {ValidationError} If limit isn't an integer in
+ *   [MIN_SEARCH_LIMIT, MAX_SEARCH_LIMIT], or offset isn't a non-negative
+ *   integer.
+ */
+function validateSearchPagination(limit, offset) {
+  if (!Number.isInteger(limit) || limit < MIN_SEARCH_LIMIT || limit > MAX_SEARCH_LIMIT) {
+    throw new ValidationError(
+      `limit must be an integer between ${MIN_SEARCH_LIMIT} and ${MAX_SEARCH_LIMIT} — got ${JSON.stringify(limit)}`
+    );
+  }
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new ValidationError(`offset must be a non-negative integer — got ${JSON.stringify(offset)}`);
+  }
+  return { limit, offset };
+}
+
 module.exports = {
   ValidationError,
   normalizeLanguageTag,
@@ -239,9 +334,16 @@ module.exports = {
   validateContent,
   validateStatus,
   validateUpdatedBy,
+  validateSearchMode,
+  validateSearchQuery,
+  validateSearchPagination,
   MAX_STRING_ID_LEN,
   MAX_CONTEXT_LEN,
   MAX_CONTENT_LEN,
   MAX_UPDATED_BY_LEN,
   MAX_LANGUAGE_ID_LEN,
+  MAX_SEARCH_QUERY_LEN,
+  MIN_SEARCH_LIMIT,
+  MAX_SEARCH_LIMIT,
+  DEFAULT_SEARCH_LIMIT,
 };

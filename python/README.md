@@ -25,7 +25,7 @@ strings (
 ## Usage
 
 ```python
-from multilang import db_connector, retrieve_data, insert_data
+from multilang import db_connector, retrieve_data, insert_data, search_data
 
 conn = db_connector("sqlite", path="strings.db")
 
@@ -34,8 +34,15 @@ insert_data(conn, "greeting", "es", "Hola mundo", original_language="en")
 
 retrieve_data(conn, "greeting", "es")  # -> "Hola mundo"
 
+search_data(conn, "hola", mode="exact", language_id="es")
+# -> [{"string_id": "greeting", "language_id": "es", "context": "", "content": "Hola mundo", ...}]
+
 conn.close()
 ```
+
+`search_data` also supports `mode="natural"` (default; every
+whitespace-split term must appear) and `mode="regex"` (native `re`
+syntax) — see [`../docs/search.md`](../docs/search.md).
 
 ## Credentials
 

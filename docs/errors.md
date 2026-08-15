@@ -55,6 +55,19 @@ C++'s wrapper turns `ML_ERR_DB` into a distinct `multilang::DbError`
 `catch (const multilang::DbError&)` separately, which isn't possible
 through the C layer's single status-code return.
 
+## `search_data`'s own validation triggers
+
+Beyond the field-level rules in [`validation.md`](validation.md),
+`search_data` (see [`search.md`](search.md)) raises the same validation
+error type for: `mode` outside `exact`/`natural`/`regex`; an empty,
+oversized (>500 UTF-8 bytes), or NUL-containing `query`; an invalid
+`regex`-mode pattern (the underlying engine's own compile error is
+folded into the message); a `natural`-mode query with no non-whitespace
+terms; `limit` outside 1–500; and a negative `offset`. A missing row from
+a `language_id`/`context`/`status` filter that matches nothing is not an
+error, same principle as the next section — `search_data` returns an
+empty list, not an exception.
+
 ## `retrieve_data` on a missing row is not an error
 
 Worth stating explicitly because it's easy to assume otherwise: asking

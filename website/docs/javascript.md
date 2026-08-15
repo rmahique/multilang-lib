@@ -18,7 +18,7 @@ environment variables. Copied verbatim from
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { dbConnector, retrieveData, insertData, ValidationError } = require('../src/index');
+const { dbConnector, retrieveData, insertData, searchData, ValidationError } = require('../src/index');
 
 async function main() {
   // dbConnector reads MULTILANG_DB_BACKEND (and the matching
@@ -53,6 +53,16 @@ async function main() {
 
   console.log(await retrieveData(conn, 'post', 'en', 'button.publish')); // -> "Publish"
   console.log(await retrieveData(conn, 'post', 'en', 'menu.item'));      // -> "Post"
+
+  // --- searchData: find rows by content, not by exact key ---------------
+  await insertData(conn, 'welcome1', 'en', 'Welcome to our platform');
+  await insertData(conn, 'welcome2', 'en', 'Welcome back, friend');
+  const matches = await searchData(conn, 'welcome', { mode: 'natural', languageId: 'en' });
+  for (const row of matches) {
+    console.log(row.string_id, '->', row.content);
+  }
+  // -> welcome1 -> Welcome to our platform
+  // -> welcome2 -> Welcome back, friend
 
   // --- retrieveData on a row that doesn't exist: null, not an error -----
   console.log(await retrieveData(conn, 'greeting', 'fr')); // -> null

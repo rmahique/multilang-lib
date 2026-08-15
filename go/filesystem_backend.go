@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -133,6 +134,126 @@ func (b *FilesystemBackend) Upsert(row Row) error {
 		return err
 	}
 	return os.Rename(tmpFile, file)
+}
+
+// SelectRows returns every row matching whichever filters are given, by
+// walking the directory tree instead of running a query — there's no
+// query engine here, so this is SearchData's only backend-level
+// filtering step; the actual content matching happens afterwards,
+// in-process, in SearchData itself.
+func (b *FilesystemBackend) SelectRows(languageID, status string, context *string) ([]Row, error) {
+	var langFilter *string
+	if languageID != "" {
+		langFilter = &languageID
+	}
+	var contextDirFilter *string
+	if context != nil {
+		dir := fsContextDir(*context)
+		contextDirFilter = &dir
+	}
+
+	langEntries, err := fsListDirs(b.root, langFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	var rows []Row
+	for _, lang := range langEntries {
+		stringIDEntries, err := fsListDirs(filepath.Join(b.root, lang), nil)
+		if err != nil {
+			return nil, err
+		}
+		for _, stringID := range stringIDEntries {
+			ctxEntries, err := fsListDirs(filepath.Join(b.root, lang, stringID), contextDirFilter)
+			if err != nil {
+				return nil, err
+			}
+			for _, ctxDirName := range ctxEntries {
+				path := filepath.Join(b.root, lang, stringID, ctxDirName, fsContentFilename)
+				data, err := os.ReadFile(path)
+				if errors.Is(err, os.ErrNotExist) {
+					continue
+				}
+				if err != nil {
+					return nil, err
+				}
+				var rec fsRecord
+				if err := json.Unmarshal(data, &rec); err != nil {
+					return nil, err
+				}
+				if status != "" && rec.Status != status {
+					continue
+				}
+				ctx := ctxDirName
+				if ctx == fsDefaultContextDir {
+					ctx = ""
+				}
+				dateUpdated, err := time.Parse(time.RFC3339Nano, rec.DateUpdated)
+				if err != nil {
+					return nil, err
+				}
+				rows = append(rows, Row{
+					StringID:         stringID,
+					LanguageID:       lang,
+					Context:          ctx,
+					Content:          rec.Content,
+					OriginalLanguage: derefOr(rec.OriginalLanguage, ""),
+					Status:           rec.Status,
+					SourceChecksum:   derefOr(rec.SourceChecksum, ""),
+					UpdatedBy:        derefOr(rec.UpdatedBy, ""),
+					DateUpdated:      dateUpdated,
+				})
+			}
+		}
+	}
+	return rows, nil
+}
+
+// fsContextDir maps a context value to its directory name (see the
+// layout comment at the top of this file).
+func fsContextDir(context string) string {
+	if context == "" {
+		return fsDefaultContextDir
+	}
+	return context
+}
+
+// fsListDirs returns the subdirectory names of parent — just {*only} if
+// only is given and exists, otherwise every subdirectory (sorted, for
+// deterministic iteration order). A missing parent yields no entries,
+// not an error.
+func fsListDirs(parent string, only *string) ([]string, error) {
+	if only != nil {
+		if info, err := os.Stat(filepath.Join(parent, *only)); err == nil && info.IsDir() {
+			return []string{*only}, nil
+		}
+		return nil, nil
+	}
+	entries, err := os.ReadDir(parent)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// derefOr returns *s, or fallback if s is nil — mirrors nullableStringPtr
+// (see sqlite_backend.go) for the read direction: a JSON null becomes
+// Go's "" sentinel for an unset optional field.
+func derefOr(s *string, fallback string) string {
+	if s == nil {
+		return fallback
+	}
+	return *s
 }
 
 // Close is a no-op — files are opened and closed per call.

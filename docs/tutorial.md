@@ -74,7 +74,31 @@ error condition.
 > `original_language`) are passed differs by language idiom; the data
 > model and validation behavior are identical.
 
-## 3. Switch to a real Postgres/MySQL — same code, no changes
+## 3. Find rows by content with `search_data`
+
+Once there's more than a handful of rows, looking things up only by
+exact key stops being enough — `search_data` finds rows by what's *in*
+`content`, across three modes (`exact` substring, `natural`
+whitespace-AND, `regex`). See [`search.md`](search.md) for the full
+semantics; the short version for this storefront example:
+
+```python
+from multilang import search_data
+
+for row in search_data(conn, "welcome", mode="natural", language_id="en"):
+    print(row["string_id"], "->", row["content"])
+# welcome.message -> Welcome back!
+```
+
+> **Other ports:** `searchData(conn, query, { mode, languageId, ... })`
+> in JS, `Strings::searchData($conn, $query, $mode, $languageId, ...)`
+> in PHP, `SearchData(conn, query, mode, SearchOptions{...})` in Go,
+> `ml_search_data(conn, query, mode, &opts, ...)` in C. Unlike
+> `retrieve_data`, `search_data` returns full rows (not content only),
+> since a caller can't act on a match without knowing which key it
+> belongs to.
+
+## 4. Switch to a real Postgres/MySQL — same code, no changes
 
 Bring up disposable local databases with the compose file this project
 already ships:
@@ -114,7 +138,7 @@ require TLS instead of the opportunistic default.
 podman-compose down -v        # tear back down when you're done
 ```
 
-## 4. Try the filesystem backend — no server, human-editable files
+## 5. Try the filesystem backend — no server, human-editable files
 
 There's a fourth option besides the three databases above: a backend
 that writes one `content.json` file per row under a root directory
@@ -136,7 +160,7 @@ Same validation, same primary key, same conformance suite — see
 [`connectors.md#the-filesystem-backend`](connectors.md#the-filesystem-backend)
 for the exact on-disk layout.
 
-## 5. Check your own integration against the conformance suite
+## 6. Check your own integration against the conformance suite
 
 The shared fixture at `conformance/cases.json` isn't just for this
 project's own CI — it's also a smoke test you can point at *your own*

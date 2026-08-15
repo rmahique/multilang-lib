@@ -48,16 +48,22 @@ actually happened each time, not a theoretical plan.
    validation module, a backend interface/abstraction (one
    implementation per database), a connector that turns
    `MULTILANG_DB_*` env vars + explicit credentials into a connection
-   (see [`connectors.md`](connectors.md)), and the two public functions
-   built on top. Look at whichever existing port is closest to the new
-   language's idioms as a template — Go's `Backend` interface and C's
-   `ml_backend_vtable` are the same design in different clothing.
+   (see [`connectors.md`](connectors.md)), and the three public
+   functions built on top. Look at whichever existing port is closest to
+   the new language's idioms as a template — Go's `Backend` interface and
+   C's `ml_backend_vtable` are the same design in different clothing.
+   `search_data` (see [`search.md`](search.md)) needs one more backend
+   method, `select_rows`, but no bespoke per-backend search logic — the
+   actual matching is shared code in `strings.*`, not per-backend.
 3. **Implement SQLite first**, get its own unit tests passing, *then*
    wire up the conformance runner against `conformance/cases.json` (see
    the existing five runners for the pattern — they're all short: load
-   the fixture, dispatch `retrieve_data`/`insert_data` calls, assert
-   `expect`/`expect_error`). Passing every existing case with zero
-   modifications to `cases.json` is the actual bar for "this port is
+   the fixture, dispatch `retrieve_data`/`insert_data`/`search_data`
+   calls, assert `expect`/`expect_error`; `search_data`'s `expect` is an
+   array of `[language_id, string_id, context]` triples rather than a
+   single value, since it returns full rows — see
+   [`conformance.md`](conformance.md)). Passing every existing case with
+   zero modifications to `cases.json` is the actual bar for "this port is
    correct," not a finished-when-it-compiles judgment call.
 4. **Implement Postgres and MySQL**, including the `MULTILANG_DB_SSLMODE`
    `prefer`/`require`/`disable` behavior described in
@@ -79,6 +85,6 @@ actually happened each time, not a theoretical plan.
    inconsistencies in [`validation.md`](validation.md) were byte-length
    and TLS issues that only a real server run would surface.
 7. **Write that port's own `README.md`** covering its specific usage
-   (installation, the three functions' signatures in that language's
+   (installation, the four functions' signatures in that language's
    idiom, credentials) — the top-level docs here are shared design
    rationale, not a substitute for per-port usage docs.

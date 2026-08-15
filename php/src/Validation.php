@@ -33,6 +33,14 @@ final class Validation
 
     private const VALID_STATUSES = ['draft', 'reviewed', 'published'];
 
+    // searchData limits — see docs/search.md for the rationale behind
+    // these specific numbers and the exact/natural/regex semantics.
+    public const MAX_SEARCH_QUERY_LEN = 500;
+    public const MIN_SEARCH_LIMIT = 1;
+    public const MAX_SEARCH_LIMIT = 500;
+    public const DEFAULT_SEARCH_LIMIT = 50;
+    private const VALID_SEARCH_MODES = ['exact', 'natural', 'regex'];
+
     // Simplified BCP 47: primary language (2-3 letters) + optional script
     // (4 letters) + optional region (2 letters or 3 digits) + optional
     // variants. Covers the vast majority of real-world tags: en, es,
@@ -247,5 +255,117 @@ final class Validation
             throw new ValidationException('updated_by exceeds ' . self::MAX_UPDATED_BY_LEN . ' bytes');
         }
         return $value;
+    }
+
+    /**
+     * Validate that $value is one of searchData's three modes.
+     *
+     * @throws ValidationException If not one of exact/natural/regex.
+     */
+    public static function validateSearchMode($value): string
+    {
+        if (!is_string($value) || !in_array($value, self::VALID_SEARCH_MODES, true)) {
+            $allowed = implode(', ', self::VALID_SEARCH_MODES);
+            throw new ValidationException("mode must be one of [$allowed] — got " . var_export($value, true));
+        }
+        return $value;
+    }
+
+    /**
+     * Wrap a caller's raw pattern (no delimiters, same shape Python's
+     * re.compile/Go's regexp.Compile/JS's `new RegExp` take) into a
+     * delimited PCRE pattern ready for preg_match, and confirm it
+     * compiles.
+     *
+     * The 'u' (UTF-8) modifier is not optional here: without it PCRE
+     * treats the subject as raw bytes, so a metacharacter like '.' would
+     * match half of a multi-byte UTF-8 character instead of one whole
+     * character — silently wrong for any non-ASCII content, not just a
+     * documented cross-language nuance like the regex-flavor differences
+     * elsewhere in this file.
+     *
+     * @throws ValidationException If no unused delimiter can be found, or
+     *   the pattern fails to compile.
+     */
+    private static function compileRegexPattern(string $value, bool $caseSensitive): string
+    {
+        $delimiter = null;
+        foreach (['~', '#', '%', '!', "\x01"] as $candidate) {
+            if (strpos($value, $candidate) === false) {
+                $delimiter = $candidate;
+                break;
+            }
+        }
+        if ($delimiter === null) {
+            throw new ValidationException('query is not a valid regex: no available pattern delimiter');
+        }
+
+        $pattern = $delimiter . $value . $delimiter . 'u' . ($caseSensitive ? '' : 'i');
+        if (@preg_match($pattern, '') === false) {
+            throw new ValidationException('query is not a valid regex: ' . preg_last_error_msg());
+        }
+        return $pattern;
+    }
+
+    /**
+     * Validate a searchData query and pre-process it into the form the
+     * matcher for $mode actually needs, so searchData doesn't re-derive
+     * it per row.
+     *
+     * @return array{query: string, terms: ?array, pattern: ?string} terms
+     *   is a non-empty whitespace-split array for "natural", pattern is a
+     *   delimited PCRE pattern (ready for preg_match) for "regex"; both
+     *   null otherwise.
+     * @throws ValidationException If $value is empty/too long/contains
+     *   NUL, if $mode="natural" and $value has no non-whitespace terms,
+     *   or if $mode="regex" and $value fails to compile.
+     */
+    public static function validateSearchQuery($value, string $mode, bool $caseSensitive): array
+    {
+        if (!is_string($value) || $value === '') {
+            throw new ValidationException('query must be a non-empty string');
+        }
+        if (strlen($value) > self::MAX_SEARCH_QUERY_LEN) {
+            throw new ValidationException('query exceeds ' . self::MAX_SEARCH_QUERY_LEN . ' bytes');
+        }
+        if (strpos($value, "\0") !== false) {
+            throw new ValidationException('query must not contain NUL bytes');
+        }
+
+        if ($mode === 'regex') {
+            return ['query' => $value, 'terms' => null, 'pattern' => self::compileRegexPattern($value, $caseSensitive)];
+        }
+
+        if ($mode === 'natural') {
+            $terms = preg_split('/\s+/', trim($value), -1, PREG_SPLIT_NO_EMPTY);
+            if (empty($terms)) {
+                throw new ValidationException('query must contain at least one term in natural mode');
+            }
+            return ['query' => $value, 'terms' => $terms, 'pattern' => null];
+        }
+
+        return ['query' => $value, 'terms' => null, 'pattern' => null];
+    }
+
+    /**
+     * Validate searchData's limit/offset.
+     *
+     * @return array{limit: int, offset: int}
+     * @throws ValidationException If $limit isn't an integer in
+     *   [MIN_SEARCH_LIMIT, MAX_SEARCH_LIMIT], or $offset isn't a
+     *   non-negative integer.
+     */
+    public static function validateSearchPagination($limit, $offset): array
+    {
+        if (!is_int($limit) || $limit < self::MIN_SEARCH_LIMIT || $limit > self::MAX_SEARCH_LIMIT) {
+            throw new ValidationException(
+                'limit must be an integer between ' . self::MIN_SEARCH_LIMIT . ' and ' . self::MAX_SEARCH_LIMIT .
+                ' — got ' . var_export($limit, true)
+            );
+        }
+        if (!is_int($offset) || $offset < 0) {
+            throw new ValidationException('offset must be a non-negative integer — got ' . var_export($offset, true));
+        }
+        return ['limit' => $limit, 'offset' => $offset];
     }
 }

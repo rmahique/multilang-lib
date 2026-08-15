@@ -12,9 +12,11 @@
 
 #include "multilang.h"
 
+#include <ctime>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace multilang {
 
@@ -46,6 +48,38 @@ struct InsertOptions {
     std::string original_language;
     std::string status = "draft";
     std::string updated_by;
+};
+
+/** Mirrors ml_search_mode — see docs/search.md for the exact/natural/regex semantics. */
+enum class SearchMode { Natural, Exact, Regex };
+
+/**
+ * Mirrors ml_search_options. language_id/status: "" means no filter.
+ * context: unset (std::nullopt, the default) means no filter; set to ""
+ * filters for only the default/un-contextualized row -- "" can't double
+ * as both "no filter" and "a real filter value" the way it can for
+ * language_id/status, which are never valid as "".
+ */
+struct SearchOptions {
+    std::string language_id;
+    std::optional<std::string> context;
+    std::string status;
+    bool case_sensitive = false;
+    int limit = 0; // 0 = default (ML_DEFAULT_SEARCH_LIMIT)
+    int offset = 0;
+};
+
+/** Mirrors ml_search_result — one matching row, returned by search_data. */
+struct SearchResult {
+    std::string string_id;
+    std::string language_id;
+    std::string context;
+    std::string content;
+    std::optional<std::string> original_language;
+    std::string status;
+    std::optional<std::string> source_checksum;
+    std::optional<std::string> updated_by;
+    std::time_t date_updated;
 };
 
 /**
@@ -84,6 +118,17 @@ public:
      */
     void insert_data(const std::string &string_id, const std::string &language_id,
                       const std::string &content, const InsertOptions &opts = {});
+
+    /**
+     * Search content across every row matching opts' optional filters,
+     * ordered by match score descending then (language_id, string_id,
+     * context) ascending as a deterministic tiebreak. Matching runs
+     * entirely in-process, guaranteeing identical results across every
+     * backend — see docs/search.md. Throws ValidationError if any
+     * argument fails validation.
+     */
+    std::vector<SearchResult> search_data(const std::string &query, SearchMode mode,
+                                           const SearchOptions &opts = {}) const;
 
     /** Raw handle, for interop with the C API. */
     ml_backend *raw() const { return conn_; }

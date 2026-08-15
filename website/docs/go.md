@@ -78,6 +78,17 @@ func main() {
 	fmt.Println(c1) // -> "Publish"
 	fmt.Println(c2) // -> "Post"
 
+	// --- SearchData: find rows by content, not by exact key -----------
+	must(multilang.InsertData(conn, "welcome1", "en", "Welcome to our platform", multilang.InsertOptions{}))
+	must(multilang.InsertData(conn, "welcome2", "en", "Welcome back, friend", multilang.InsertOptions{}))
+	matches, err := multilang.SearchData(conn, "welcome", multilang.SearchModeNatural, multilang.SearchOptions{LanguageID: "en"})
+	must(err)
+	for _, r := range matches {
+		fmt.Println(r.StringID, "->", r.Content)
+	}
+	// -> welcome1 -> Welcome to our platform
+	// -> welcome2 -> Welcome back, friend
+
 	// --- RetrieveData on a row that doesn't exist: found=false, not an error
 	_, found, err = multilang.RetrieveData(conn, "greeting", "fr", "")
 	must(err)

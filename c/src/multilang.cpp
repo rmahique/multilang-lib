@@ -98,4 +98,54 @@ void Connection::insert_data(const std::string &string_id, const std::string &la
     }
 }
 
+std::vector<SearchResult> Connection::search_data(const std::string &query, SearchMode mode,
+                                                    const SearchOptions &opts) const
+{
+    ml_search_mode c_mode = mode == SearchMode::Exact   ? ML_SEARCH_EXACT
+                             : mode == SearchMode::Regex ? ML_SEARCH_REGEX
+                                                          : ML_SEARCH_NATURAL;
+
+    ml_search_options c_opts{};
+    c_opts.language_id = c_str_or_null(opts.language_id);
+    // opts.context: unset -> nullptr (no filter); set to "" -> a pointer
+    // to an empty (but non-null) C string, which ml_search_data reads as
+    // "filter for the default/un-contextualized row" -- distinct from
+    // "no filter" only because std::optional lets us tell "unset" and
+    // "set to empty" apart, unlike a plain std::string.
+    c_opts.context = opts.context.has_value() ? opts.context->c_str() : nullptr;
+    c_opts.status = c_str_or_null(opts.status);
+    c_opts.case_sensitive = opts.case_sensitive ? 1 : 0;
+    c_opts.limit = opts.limit;
+    c_opts.offset = opts.offset;
+
+    ml_search_result *results = nullptr;
+    size_t count = 0;
+    char errbuf[ML_ERRBUF_LEN] = {0};
+    ml_status status =
+        ml_search_data(conn_, query.c_str(), c_mode, &c_opts, &results, &count, errbuf, sizeof(errbuf));
+    if (status != ML_OK) {
+        throw_for_status(status, errbuf);
+    }
+
+    std::vector<SearchResult> out;
+    out.reserve(count);
+    for (size_t i = 0; i < count; i++) {
+        SearchResult r;
+        r.string_id = results[i].string_id;
+        r.language_id = results[i].language_id;
+        r.context = results[i].context;
+        r.content = results[i].content;
+        r.original_language =
+            results[i].original_language ? std::optional<std::string>(results[i].original_language) : std::nullopt;
+        r.status = results[i].status;
+        r.source_checksum =
+            results[i].source_checksum ? std::optional<std::string>(results[i].source_checksum) : std::nullopt;
+        r.updated_by = results[i].updated_by ? std::optional<std::string>(results[i].updated_by) : std::nullopt;
+        r.date_updated = results[i].date_updated;
+        out.push_back(std::move(r));
+    }
+    ml_free_search_results(results, count);
+    return out;
+}
+
 } // namespace multilang

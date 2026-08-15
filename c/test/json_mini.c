@@ -183,6 +183,25 @@ static json_value *parse_object(parser *ps)
     return v;
 }
 
+/* Plain integers only (optional leading '-', digits) -- the only numeric
+ * shape conformance/cases.json ever uses. */
+static json_value *parse_number(parser *ps)
+{
+    const char *start = ps->p;
+    if (*ps->p == '-') {
+        ps->p++;
+    }
+    while (*ps->p >= '0' && *ps->p <= '9') {
+        ps->p++;
+    }
+    if (ps->p == start || (ps->p == start + 1 && start[0] == '-')) {
+        return NULL; /* no digits consumed */
+    }
+    json_value *v = alloc_value(JSON_NUMBER);
+    v->as.number = strtol(start, NULL, 10);
+    return v;
+}
+
 static json_value *parse_value(parser *ps)
 {
     skip_ws(ps);
@@ -205,7 +224,10 @@ static json_value *parse_value(parser *ps)
         v->as.boolean = 0;
         return v;
     }
-    return NULL; /* numbers unsupported: unused by conformance/cases.json */
+    if (*ps->p == '-' || (*ps->p >= '0' && *ps->p <= '9')) {
+        return parse_number(ps);
+    }
+    return NULL;
 }
 
 json_value *json_parse(const char *text)
@@ -277,6 +299,11 @@ size_t json_array_size(const json_value *arr)
 const char *json_as_string(const json_value *v, const char *fallback)
 {
     return (v != NULL && v->type == JSON_STRING) ? v->as.string : fallback;
+}
+
+long json_as_int(const json_value *v, long fallback)
+{
+    return (v != NULL && v->type == JSON_NUMBER) ? v->as.number : fallback;
 }
 
 int json_is_null(const json_value *v)

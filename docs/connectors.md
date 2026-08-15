@@ -1,14 +1,15 @@
 # Connectors, credentials, and TLS
 
-## The three-function shape
+## The four-function shape
 
-Every port exposes the same three entry points, under names idiomatic to
-that language (`db_connector`/`retrieve_data`/`insert_data` in Python,
-`dbConnector`/`retrieveData`/`insertData` in JavaScript,
-`Connector::connect`/`Strings::retrieveData`/`Strings::insertData` in
-PHP, `Connect`/`RetrieveData`/`InsertData` in Go,
-`ml_connect`/`ml_retrieve_data`/`ml_insert_data` in C, and a thin
-`multilang::Connection` RAII wrapper over the C API in C++):
+Every port exposes the same four entry points, under names idiomatic to
+that language (`db_connector`/`retrieve_data`/`insert_data`/`search_data`
+in Python, `dbConnector`/`retrieveData`/`insertData`/`searchData` in
+JavaScript, `Connector::connect`/`Strings::retrieveData`/
+`Strings::insertData`/`Strings::searchData` in PHP,
+`Connect`/`RetrieveData`/`InsertData`/`SearchData` in Go,
+`ml_connect`/`ml_retrieve_data`/`ml_insert_data`/`ml_search_data` in C,
+and a thin `multilang::Connection` RAII wrapper over the C API in C++):
 
 - **connect** — turns a backend name (`"sqlite"` | `"postgres"` |
   `"mysql"` | `"filesystem"`) and credentials into an open, schema-ready
@@ -20,15 +21,19 @@ PHP, `Connect`/`RetrieveData`/`InsertData` in Go,
 - **retrieve_data** — validates its arguments and returns content only —
   no metadata, matching the schema design in
   [`schema.md`](schema.md).
+- **search_data** — finds rows by content instead of by exact key
+  (regex/natural/exact matching). See [`search.md`](search.md) for the
+  full design; unlike the other three, it returns full rows, not content
+  only.
 
 Internally, every port implements this via a small backend abstraction —
-an interface/vtable with `EnsureSchema`, `SelectContent`, `Upsert`,
-`Close` (Go's `Backend` interface, C's `ml_backend_vtable`, Python's
-`Backend` ABC, etc.) — so the SQLite/Postgres/MySQL/filesystem-specific
-logic lives in exactly one place per language, and adding another
-backend means implementing that interface once, not touching
-`insert_data`/`retrieve_data` at all — that's exactly how the filesystem
-backend below was added.
+an interface/vtable with `EnsureSchema`, `SelectContent`, `SelectRows`,
+`Upsert`, `Close` (Go's `Backend` interface, C's `ml_backend_vtable`,
+Python's `Backend` ABC, etc.) — so the SQLite/Postgres/MySQL/filesystem-
+specific logic lives in exactly one place per language, and adding
+another backend means implementing that interface once, not touching
+`insert_data`/`retrieve_data`/`search_data` at all — that's exactly how
+the filesystem backend below was added.
 
 ## The filesystem backend
 

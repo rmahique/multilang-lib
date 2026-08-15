@@ -92,6 +92,78 @@ class FilesystemBackend {
     await fs.rename(tmpFile, file);
   }
 
+  /**
+   * Return every row matching whichever of language_id/context/status
+   * are non-null, by walking the directory tree instead of running a
+   * query — there's no query engine here, so this is searchData's only
+   * backend-level filtering step; the actual content matching happens
+   * afterwards, in-process, in searchData itself.
+   */
+  async selectRows({ language_id = null, context = null, status = null } = {}) {
+    const contextDirFilter = context === null ? null : context === '' ? DEFAULT_CONTEXT_DIR : context;
+    const rows = [];
+
+    const langDirs = await this._listDirs(this._root, language_id);
+    for (const lang of langDirs) {
+      const stringIdDirs = await this._listDirs(path.join(this._root, lang), null);
+      for (const stringId of stringIdDirs) {
+        const ctxDirs = await this._listDirs(path.join(this._root, lang, stringId), contextDirFilter);
+        for (const ctxDirName of ctxDirs) {
+          const file = path.join(this._root, lang, stringId, ctxDirName, CONTENT_FILENAME);
+          let record;
+          try {
+            record = JSON.parse(await fs.readFile(file, 'utf8'));
+          } catch (err) {
+            if (err.code === 'ENOENT') continue;
+            throw err;
+          }
+          if (status !== null && record.status !== status) continue;
+          rows.push({
+            string_id: stringId,
+            language_id: lang,
+            context: ctxDirName === DEFAULT_CONTEXT_DIR ? '' : ctxDirName,
+            content: record.content,
+            original_language: record.original_language ?? null,
+            status: record.status,
+            source_checksum: record.source_checksum ?? null,
+            updated_by: record.updated_by ?? null,
+            date_updated: new Date(record.date_updated),
+          });
+        }
+      }
+    }
+    return rows;
+  }
+
+  /**
+   * Return the subdirectory names of `parent` — just [only] if `only` is
+   * given and exists, otherwise every subdirectory (sorted, for
+   * deterministic iteration order). A missing parent yields no entries,
+   * not an error.
+   */
+  async _listDirs(parent, only) {
+    if (only !== null) {
+      try {
+        const stat = await fs.stat(path.join(parent, only));
+        return stat.isDirectory() ? [only] : [];
+      } catch (err) {
+        if (err.code === 'ENOENT') return [];
+        throw err;
+      }
+    }
+    let entries;
+    try {
+      entries = await fs.readdir(parent, { withFileTypes: true });
+    } catch (err) {
+      if (err.code === 'ENOENT') return [];
+      throw err;
+    }
+    return entries
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .sort();
+  }
+
   /** No connection to close — files are opened and closed per call. */
   async close() {}
 }

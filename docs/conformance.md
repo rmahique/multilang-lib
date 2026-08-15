@@ -35,13 +35,16 @@ itself. If a new behavior needs testing, it's added once, here, and
 every port automatically inherits the obligation to satisfy it.
 
 `expect` is the exact string `retrieve_data` must return, or JSON `null`
-for "no row found." `expect_error: true` means the operation must raise
-that language's `ValidationError` equivalent — the row must not be
-written or returned.
+for "no row found" — or, for a `search_data` op, an array of
+`[language_id, string_id, context]` triples in the exact order it must
+return them (see [`search.md`](search.md)), since that function returns
+full rows rather than one value. `expect_error: true` means the
+operation must raise that language's `ValidationError` equivalent — the
+row must not be written or returned.
 
 ## What it actually catches
 
-Most of the current 61 cases exist because they were added *after* finding a
+Most of the current 72 cases exist because they were added *after* finding a
 real cross-language discrepancy — length-boundary behavior, casing
 normalization, BCP 47 edge shapes, and so on. See
 [`validation.md`](validation.md#resolved-cross-language-inconsistencies)

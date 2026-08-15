@@ -40,6 +40,11 @@ const postgresSelect = `
 SELECT content FROM strings
 WHERE language_id = $1 AND string_id = $2 AND context = $3`
 
+const postgresSelectRowsBase = `
+SELECT string_id, language_id, context, content, original_language,
+       status, source_checksum, updated_by, date_updated
+FROM strings`
+
 // PostgresBackend is the Backend implementation for PostgreSQL.
 type PostgresBackend struct {
 	db *sql.DB
@@ -114,6 +119,36 @@ func (b *PostgresBackend) Upsert(row Row) error {
 		row.DateUpdated,
 	)
 	return err
+}
+
+// SelectRows returns every row matching whichever filters are given.
+func (b *PostgresBackend) SelectRows(languageID, status string, context *string) ([]Row, error) {
+	where, args := searchWhereClause(languageID, status, context, dollarPlaceholder)
+	query := postgresSelectRowsBase
+	if where != "" {
+		query += " WHERE " + where
+	}
+
+	rows, err := b.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []Row
+	for rows.Next() {
+		var r Row
+		var originalLanguage, sourceChecksum, updatedBy sql.NullString
+		if err := rows.Scan(&r.StringID, &r.LanguageID, &r.Context, &r.Content,
+			&originalLanguage, &r.Status, &sourceChecksum, &updatedBy, &r.DateUpdated); err != nil {
+			return nil, err
+		}
+		r.OriginalLanguage = originalLanguage.String
+		r.SourceChecksum = sourceChecksum.String
+		r.UpdatedBy = updatedBy.String
+		result = append(result, r)
+	}
+	return result, rows.Err()
 }
 
 // Close closes the underlying connection.

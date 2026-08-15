@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Multilang\Backends;
 
+use DateTimeImmutable;
 use PDO;
 
 /** SQLite backend, via PDO — the zero-setup default, and what the test suite uses. */
@@ -42,6 +43,12 @@ SQL;
     private const SELECT = <<<SQL
 SELECT content FROM strings
 WHERE language_id = :language_id AND string_id = :string_id AND context = :context
+SQL;
+
+    private const SELECT_ROWS_BASE = <<<SQL
+SELECT string_id, language_id, context, content, original_language,
+       status, source_checksum, updated_by, date_updated
+FROM strings
 SQL;
 
     private PDO $pdo;
@@ -84,6 +91,37 @@ SQL;
             // same UTC instant every other backend's column represents.
             'date_updated' => $row['date_updated']->format('Y-m-d\TH:i:s.uP'),
         ]);
+    }
+
+    public function selectRows(?string $languageId, ?string $context, ?string $status): array
+    {
+        $clauses = [];
+        $params = [];
+        if ($languageId !== null) {
+            $clauses[] = 'language_id = :language_id';
+            $params['language_id'] = $languageId;
+        }
+        if ($context !== null) {
+            $clauses[] = 'context = :context';
+            $params['context'] = $context;
+        }
+        if ($status !== null) {
+            $clauses[] = 'status = :status';
+            $params['status'] = $status;
+        }
+
+        $sql = self::SELECT_ROWS_BASE . ($clauses ? ' WHERE ' . implode(' AND ', $clauses) : '');
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        $rows = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            // SQLite has no native timestamp type; date_updated was
+            // stored as text by upsert(), so it's parsed back here.
+            $row['date_updated'] = new DateTimeImmutable($row['date_updated']);
+            $rows[] = $row;
+        }
+        return $rows;
     }
 
     public function close(): void

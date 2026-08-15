@@ -13,7 +13,7 @@ is the only layer that knows which database it's talking to.
 
 ```mermaid
 flowchart TD
-    App["Caller's code"] --> Pub["Public API\ndb_connector / insert_data / retrieve_data\n(insertData/retrieveData, ml_insert_data/ml_retrieve_data, etc.)"]
+    App["Caller's code"] --> Pub["Public API\ndb_connector / insert_data / retrieve_data / search_data\n(insertData/retrieveData/searchData, ml_insert_data/ml_retrieve_data/ml_search_data, etc.)"]
     Pub --> Val["Validation\nallow-list checks: BCP 47 language_id,\nidentifier string_id/context, length caps,\nASCII-only lowercasing\n(validation.md)"]
     Val -- "rejected: raises/throws\nValidationError before any SQL runs" --> App
     Val --> Conn["Connector\npicks a backend by name,\nresolves credentials from\nMULTILANG_DB_* env vars\n(connectors.md)"]
@@ -42,7 +42,7 @@ the case list.
 
 ```mermaid
 flowchart LR
-    Fixture["conformance/cases.json\n(shared operations + expected\nresults/errors, 61 cases)"]
+    Fixture["conformance/cases.json\n(shared operations + expected\nresults/errors, 72 cases)"]
 
     Fixture --> PyR["Python runner\ntest_conformance.py"]
     Fixture --> JsR["JS runner\nconformance.test.js"]
@@ -108,14 +108,14 @@ runtime all execute inside the containers it starts.
 
 ## 4. How a consuming application integrates the library
 
-Where the three public entry points sit relative to the caller's own
+Where the four public entry points sit relative to the caller's own
 code — the same shape regardless of which port or backend is chosen.
 
 ```mermaid
 flowchart LR
     subgraph YourApp["Your application"]
         Startup["Startup:\ndb_connector(backend, credentials)\nor env-var-only db_connector()"]
-        Business["Business logic:\ninsert_data(...) when content is\nauthored/translated\nretrieve_data(...) when rendering\na user-facing string"]
+        Business["Business logic:\ninsert_data(...) when content is\nauthored/translated\nretrieve_data(...) when rendering\na user-facing string\nsearch_data(...) when finding rows\nby content instead of exact key"]
     end
 
     Startup --> Conn(("connection\nhandle/object"))

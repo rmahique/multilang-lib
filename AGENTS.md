@@ -41,12 +41,15 @@ representative example: adding the filesystem backend touched not just
 backend counts, all 6 `examples/basic_usage.*` docstrings, `AGENTS.md`'s
 file map, and `CHANGELOG.md` — in the same change, not a follow-up.
 
-## Public API (same 3 functions/shapes in every port)
+## Public API (same 4 functions/shapes in every port)
 
 `db_connector(backend, credentials)` → connection · `insert_data(conn,
 string_id, language_id, content, ...)` → upsert · `retrieve_data(conn,
 string_id, language_id, context?)` → content or "not found" (never
-raises for a missing row — see [`docs/errors.md`](docs/errors.md)).
+raises for a missing row — see [`docs/errors.md`](docs/errors.md)) ·
+`search_data(conn, query, mode?, ...)` → list of full matching rows,
+regex/natural/exact modes, matching run in-process so results are
+identical across every backend — see [`docs/search.md`](docs/search.md).
 
 ## File map: where a concern lives, per port
 
@@ -159,6 +162,7 @@ parameterized.
 descriptions. Most relevant when actually changing code:
 [`docs/validation.md`](docs/validation.md) (rules + past bugs),
 [`docs/errors.md`](docs/errors.md) (error types per language),
-[`docs/extending.md`](docs/extending.md) (checklist for a new
-conformance case or 6th port), [`docs/architecture.md`](docs/architecture.md)
-(diagrams).
+[`docs/search.md`](docs/search.md) (`search_data`'s modes and why
+matching runs in-process, not per-backend), [`docs/extending.md`](docs/extending.md)
+(checklist for a new conformance case or 6th port),
+[`docs/architecture.md`](docs/architecture.md) (diagrams).

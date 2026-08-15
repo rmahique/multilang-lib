@@ -28,6 +28,20 @@ interface BackendInterface
      */
     public function upsert(array $row): void;
 
+    /**
+     * Return every full row (same shape as upsert's $row array) matching
+     * whichever of $languageId/$context/$status are not null — an
+     * omitted (null) filter matches every value of that column.
+     *
+     * No content matching happens here: searchData does its own
+     * in-process regex/natural/exact matching over whatever this
+     * returns, which is what keeps search behavior identical across
+     * every backend (see docs/search.md).
+     *
+     * @return array[] Each element has the same keys as upsert's $row.
+     */
+    public function selectRows(?string $languageId, ?string $context, ?string $status): array;
+
     /** Close the underlying connection. */
     public function close(): void;
 }

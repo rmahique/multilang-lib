@@ -27,6 +27,19 @@ class Backend(ABC):
         """
 
     @abstractmethod
+    def select_rows(self, language_id=None, context=None, status=None):
+        """
+        Return every full row (same shape as upsert's `row` dict) matching
+        whichever of language_id/context/status are not None — an
+        omitted (None) filter matches every value of that column.
+
+        No content matching happens here: search_data does its own
+        in-process regex/natural/exact matching over whatever this
+        returns, which is what keeps search behavior identical across
+        every backend (see docs/search.md).
+        """
+
+    @abstractmethod
     def close(self):
         """Close the underlying connection."""
 

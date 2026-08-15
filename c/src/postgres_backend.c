@@ -104,6 +104,95 @@ static ml_status pg_upsert(void *ctx, const ml_row *row, char *errbuf, size_t er
     return status;
 }
 
+/* Parses "YYYY-MM-DDTHH:MI:SSZ" (the fixed format pg_select_rows' own
+ * to_char() call forces, independent of the session's `timezone` GUC)
+ * back into a UTC time_t -- see sqlite_backend.c's parse_utc_timestamp
+ * for why this doesn't use strptime()/timegm(). Duplicated per file
+ * rather than shared, matching this project's existing per-backend-file
+ * duplication of small helpers like set_errbuf. */
+static time_t parse_utc_timestamp(const char *text)
+{
+    int year, mon, day, hour, min, sec;
+    sscanf(text, "%d-%d-%dT%d:%d:%dZ", &year, &mon, &day, &hour, &min, &sec);
+
+    int y = year - (mon <= 2);
+    long era = (y >= 0 ? y : y - 399) / 400;
+    unsigned yoe = (unsigned) (y - era * 400);
+    unsigned doy = (unsigned) ((153 * (mon + (mon > 2 ? -3 : 9)) + 2) / 5 + day - 1);
+    unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    long days = era * 146097L + (long) doe - 719468L;
+
+    return (time_t) days * 86400 + hour * 3600 + min * 60 + sec;
+}
+
+static ml_status pg_select_rows(void *ctx, const char *language_id, const char *context,
+                                 const char *status, ml_backend_row **out_rows, size_t *out_count,
+                                 char *errbuf, size_t errbuf_len)
+{
+    PGconn *conn = (PGconn *) ctx;
+
+    /* to_char(... AT TIME ZONE 'UTC' ...) pins the output format to a
+     * fixed shape this file controls, instead of letting it vary with
+     * the session's `timezone` GUC the way a plain date_updated column
+     * reference would -- so parse_utc_timestamp can rely on one format
+     * regardless of server/session configuration. */
+    char sql[768] =
+        "SELECT string_id, language_id, context, content, original_language, "
+        "status, source_checksum, updated_by, "
+        "to_char(date_updated AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') "
+        "FROM strings";
+    char clause[256] = "";
+    const char *params[3];
+    int nparams = 0;
+
+    if (language_id != NULL) {
+        char piece[32];
+        snprintf(piece, sizeof(piece), "%slanguage_id = $%d", nparams == 0 ? " WHERE " : " AND ", nparams + 1);
+        strcat(clause, piece);
+        params[nparams++] = language_id;
+    }
+    if (context != NULL) {
+        char piece[32];
+        snprintf(piece, sizeof(piece), "%scontext = $%d", nparams == 0 ? " WHERE " : " AND ", nparams + 1);
+        strcat(clause, piece);
+        params[nparams++] = context;
+    }
+    if (status != NULL) {
+        char piece[32];
+        snprintf(piece, sizeof(piece), "%sstatus = $%d", nparams == 0 ? " WHERE " : " AND ", nparams + 1);
+        strcat(clause, piece);
+        params[nparams++] = status;
+    }
+    strcat(sql, clause);
+
+    PGresult *res = PQexecParams(conn, sql, nparams, NULL, params, NULL, NULL, 0);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        set_errbuf(errbuf, errbuf_len, PQerrorMessage(conn));
+        PQclear(res);
+        return ML_ERR_DB;
+    }
+
+    int ntuples = PQntuples(res);
+    ml_backend_row *rows = malloc((size_t) (ntuples > 0 ? ntuples : 1) * sizeof(ml_backend_row));
+    for (int i = 0; i < ntuples; i++) {
+        ml_backend_row *r = &rows[i];
+        r->string_id = strdup(PQgetvalue(res, i, 0));
+        r->language_id = strdup(PQgetvalue(res, i, 1));
+        r->context = strdup(PQgetvalue(res, i, 2));
+        r->content = strdup(PQgetvalue(res, i, 3));
+        r->original_language = PQgetisnull(res, i, 4) ? NULL : strdup(PQgetvalue(res, i, 4));
+        r->status = strdup(PQgetvalue(res, i, 5));
+        r->source_checksum = PQgetisnull(res, i, 6) ? NULL : strdup(PQgetvalue(res, i, 6));
+        r->updated_by = PQgetisnull(res, i, 7) ? NULL : strdup(PQgetvalue(res, i, 7));
+        r->date_updated = parse_utc_timestamp(PQgetvalue(res, i, 8));
+    }
+    PQclear(res);
+
+    *out_rows = rows;
+    *out_count = (size_t) ntuples;
+    return ML_OK;
+}
+
 static ml_status pg_truncate(void *ctx, char *errbuf, size_t errbuf_len)
 {
     PGconn *conn = (PGconn *) ctx;
@@ -126,6 +215,7 @@ static const ml_backend_vtable POSTGRES_VTABLE = {
     .ensure_schema = pg_ensure_schema,
     .select_content = pg_select_content,
     .upsert = pg_upsert,
+    .select_rows = pg_select_rows,
     .truncate = pg_truncate,
     .close = pg_close,
 };
