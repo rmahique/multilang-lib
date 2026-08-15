@@ -456,7 +456,7 @@ static void free_names(char **names, size_t count)
 }
 
 /*
- * Returns the subdirectory names of `parent` via *out_names/*out_count
+ * Returns the subdirectory names of `parent` via *out_names and *out_count
  * -- just [only] if `only` is given and exists, otherwise every
  * subdirectory (sorted, for deterministic iteration order). A missing
  * `parent` yields zero entries, not an error.

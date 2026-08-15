@@ -62,7 +62,7 @@ typedef struct {
 
     /* Returns every row matching whichever of language_id/context/status
      * are non-NULL (an omitted, NULL filter matches every value of that
-     * column) via *out_rows/*out_count. Caller must free with
+     * column) via *out_rows and *out_count. Caller must free with
      * ml_backend_free_rows. No content matching happens here:
      * ml_search_data does its own in-process regex/natural/exact
      * matching over whatever this returns, which is what keeps search

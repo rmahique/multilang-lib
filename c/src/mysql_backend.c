@@ -229,6 +229,18 @@ static ml_status mysql_select_rows(void *ctx, const char *language_id, const cha
         return ML_ERR_DB;
     }
 
+    /* Without this, mysql_stmt_store_result() below leaves every field's
+     * max_length at 0 instead of updating it to the actual longest value
+     * per column -- so every result buffer gets sized to 1 byte, every
+     * fetch is silently truncated, and mysql_stmt_fetch() returns
+     * MYSQL_DATA_TRUNCATED (not 0) on the very first row. The fetch loop
+     * below only continues on a literal 0, so a truncated first fetch
+     * looks identical to "no matching rows" instead of an error --
+     * exactly the failure this comment is here to prevent someone from
+     * reintroducing. */
+    my_bool update_max_length = 1;
+    mysql_stmt_attr_set(stmt, STMT_ATTR_UPDATE_MAX_LENGTH, &update_max_length);
+
     MYSQL_BIND params[3];
     memset(params, 0, sizeof(params));
     for (int i = 0; i < nparams; i++) {
