@@ -24,6 +24,18 @@
 # unreleased dated build needs).
 set -euo pipefail
 
+# build-packages.yml bind-mounts the host checkout into a --rm container
+# that runs as root; the mounted directory is owned by the runner's
+# non-root user. Git's ownership check (the CVE-2022-24765 mitigation)
+# refuses to run ANY git command against a repository it doesn't own
+# unless explicitly trusted -- which would otherwise make every git call
+# below (and every build-deb.sh's later `git rev-parse --short HEAD` for
+# its changelog entry, in the same container) silently fail and fall
+# back to "untagged"/"unknown" even on an actual tagged-release build.
+# Safe to trust unconditionally: this container is single-purpose and
+# always torn down right after the build script that calls this exits.
+git config --global --add safe.directory '*' 2>/dev/null || true
+
 FORMAT="${1:?usage: compute-version.sh <deb|rpm> <fallback-version>}"
 FALLBACK_VERSION="${2:?usage: compute-version.sh <deb|rpm> <fallback-version>}"
 TODAY="$(date -u +%Y%m%d)"
