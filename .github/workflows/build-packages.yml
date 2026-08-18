@@ -1,7 +1,7 @@
 # Reusable workflow: builds every language port's native package for
 # every distro documented in <language>/packaging/README.md (Debian
 # bookworm, Fedora latest, openSUSE Leap 15, openSUSE Tumbleweed, SLES
-# 16 -- 25 combinations), and uploads each as a build artifact named
+# 16, Alpine -- 30 combinations), and uploads each as a build artifact named
 # multilang-<combo.name>. Version comes from scripts/compute-version.sh:
 # the exact tag when HEAD is a release, otherwise <latest tag or that
 # language's own manifest version> plus today's date. Each package gets
@@ -17,12 +17,14 @@
 #   - release.yml — on a version tag, so the same packages get attached
 #                  to the GitHub Release.
 #
-# 5 languages x 5 distros = 25 explicit combinations rather than two
+# 5 languages x 6 distros = 30 explicit combinations rather than two
 # independent matrix axes: dependencies differ enough per language+distro
 # pair (Python's openSUSE Leap 15 job needs the leap15_python_workaround
 # env var that no other job needs; C needs -devel packages none of the
-# other four languages need at all) that composing them from two axes
-# would be harder to read than just listing them.
+# other four languages need at all; Alpine's build/collect commands are
+# structurally different from every .deb/.rpm job, see build-apk.sh) that
+# composing them from two axes would be harder to read than just listing
+# them.
 #
 # Each combo builds on the *same distro it packages for* -- a Debian
 # package is built inside a Debian container, an RPM for openSUSE Leap 15
@@ -82,6 +84,11 @@ jobs:
             distro: sles-16
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: python-alpine
+            language: python
+            distro: alpine
+            build: packaging/build-apk.sh
+            collect: find /home/builder/packages -name "*.apk" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
 
           # --- Go (source-only) ---
           - name: go-debian-bookworm
@@ -109,6 +116,11 @@ jobs:
             distro: sles-16
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: go-alpine
+            language: go
+            distro: alpine
+            build: packaging/build-apk.sh
+            collect: find /home/builder/packages -name "*.apk" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
 
           # --- JavaScript (source-only, wraps the npm package) ---
           - name: javascript-debian-bookworm
@@ -136,6 +148,11 @@ jobs:
             distro: sles-16
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: javascript-alpine
+            language: javascript
+            distro: alpine
+            build: packaging/build-apk.sh
+            collect: find /home/builder/packages -name "*.apk" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
 
           # --- PHP (source-only, wraps the Composer package) ---
           - name: php-debian-bookworm
@@ -163,6 +180,11 @@ jobs:
             distro: sles-16
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: php-alpine
+            language: php
+            distro: alpine
+            build: packaging/build-apk.sh
+            collect: find /home/builder/packages -name "*.apk" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
 
           # --- C/C++ (real compiled shared-library + headers split) ---
           - name: c-debian-bookworm
@@ -190,6 +212,11 @@ jobs:
             distro: sles-16
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: c-alpine
+            language: c
+            distro: alpine
+            build: packaging/build-apk.sh
+            collect: find /home/builder/packages -name "*.apk" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
     steps:
       - uses: actions/checkout@v7
       - name: Build the ${{ matrix.combo.distro }} packaging image

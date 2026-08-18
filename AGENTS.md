@@ -69,7 +69,7 @@ identical across every backend — see [`docs/search.md`](docs/search.md).
 | Conformance runner | `python/tests/test_conformance.py` | `javascript/test/conformance.test.js` | `php/tests/ConformanceTest.php` | `go/conformance_test.go` | `c/test/test_conformance.c` + `test_cpp.cpp` |
 | Container test image | `python/Dockerfile.conformance` | `javascript/Dockerfile.conformance` | `php/Dockerfile.conformance` | `go/Dockerfile.conformance` | `c/Dockerfile.conformance` |
 | Runnable example | `python/examples/basic_usage.py` | `javascript/examples/basic-usage.js` | `php/examples/basic_usage.php` | `go/examples/basic_usage.go` | `c/examples/basic_usage.c` (+`.cpp`) |
-| Distro packaging (`.deb`/`.rpm`, 5 distros: Debian bookworm, Fedora latest, openSUSE Leap 15, openSUSE Tumbleweed, SLES 16) | `python/packaging/` | `javascript/packaging/` | `php/packaging/` | `go/packaging/` | `c/packaging/` |
+| Distro packaging (`.deb`/`.rpm`/`.apk`, 6 distros: Debian bookworm, Fedora latest, openSUSE Leap 15, openSUSE Tumbleweed, SLES 16, Alpine) | `python/packaging/` | `javascript/packaging/` | `php/packaging/` | `go/packaging/` | `c/packaging/` |
 
 ## Schema (identical DDL intent in every backend)
 

@@ -81,14 +81,15 @@ cd conformance && ./run-live-db-tests.sh
 
 ## Downloads
 
-Every push and PR builds a native `.deb`/`.rpm` for all 5 ports across 5
-distros (Debian bookworm, Fedora latest, openSUSE Leap 15, openSUSE
-Tumbleweed, SLES 16) — see each port's own `packaging/README.md` for
-what's shipped and how to build one yourself. For a stable download link
+Every push and PR builds a native `.deb`/`.rpm`/`.apk` for all 5 ports
+across 6 distros (Debian bookworm, Fedora latest, openSUSE Leap 15,
+openSUSE Tumbleweed, SLES 16, Alpine) — see each port's own
+`packaging/README.md` for what's shipped and how to build one yourself.
+For a stable download link
 instead of a workflow-run artifact:
 
 **[Latest GitHub Release](https://github.com/rmahique/multilang-lib/releases/latest)**
-— every `.deb`/`.rpm` plus a matching `.sha512`, published whenever a
+— every `.deb`/`.rpm`/`.apk` plus a matching `.sha512`, published whenever a
 version tag (e.g. `1.0`, `1.0rc1`) is pushed (see
 [`.github/workflows/release.yml`](.github/workflows/release.yml)).
 Filenames are prefixed with their language and distro, e.g.

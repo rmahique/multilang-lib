@@ -1,0 +1,29 @@
+# Contributor: Raúl Mahiques <claude.ia@raulmahiques.com>
+# Maintainer: Raúl Mahiques <claude.ia@raulmahiques.com>
+pkgname=nodejs-multilang
+# build-apk.sh exports MULTILANG_VERSION before invoking abuild; 0.1.0
+# here is only a fallback for anyone invoking abuild directly.
+pkgver=${MULTILANG_VERSION:-0.1.0}
+pkgrel=0
+pkgdesc="Reusable multi-language string storage library (Node.js source)"
+url="https://github.com/rmahique/multilang-lib"
+arch="noarch"
+license="GPL-3.0-or-later"
+depends="nodejs"
+# No source= URL: ships as plain require()-able source under
+# /usr/lib/node_modules/multilang/, not a full npm registry mirror --
+# same convention as ../../debian/rules and ../../rpm/nodejs-multilang.spec.
+# Deliberately declares no depends on the database driver packages
+# (better-sqlite3, mysql2, pg): see the comments in those two files for
+# why. build-apk.sh stages src/ and package.json alongside this APKBUILD
+# before invoking abuild.
+source=""
+builddir="$startdir"
+options="!fetch !check"
+
+package() {
+	dest="$pkgdir/usr/lib/node_modules/multilang"
+	install -d "$dest"
+	cp -r src package.json "$dest"/
+	install -Dm644 LICENSE "$pkgdir"/usr/share/licenses/$pkgname/LICENSE
+}

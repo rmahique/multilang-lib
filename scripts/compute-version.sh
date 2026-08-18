@@ -10,7 +10,7 @@
 #                                   builds are still uniquely identifiable
 #                                   and sort after the base version.
 #
-# Usage: compute-version.sh <deb|rpm> <fallback-version>
+# Usage: compute-version.sh <deb|rpm|apk> <fallback-version>
 #
 # <fallback-version> is whatever this language's own manifest says (e.g.
 # pyproject.toml's version, package.json's version, composer.json's
@@ -21,7 +21,11 @@
 # allows `+`; RPM's does not (RPM reserves `-` and disallows `+`/`~` isn't
 # quite right either -- `^` is what modern rpm, >=4.15, treats as "newer
 # than the release it's attached to", which is exactly the semantics an
-# unreleased dated build needs).
+# unreleased dated build needs); Alpine's pkgver disallows `-` entirely
+# (abuild rejects it outright) and has no `+`/`^` equivalent, but *does*
+# recognize a fixed set of suffixes for version comparison purposes --
+# `_p<n>` ("post-release") is defined to sort *after* the bare version it's
+# attached to, same "newer than the release" semantics as RPM's `^`.
 set -euo pipefail
 
 # build-packages.yml bind-mounts the host checkout into a --rm container
@@ -64,8 +68,9 @@ fi
 case "$FORMAT" in
     deb) echo "${BASE_VERSION}+${TODAY}" ;;
     rpm) echo "${BASE_VERSION}^${TODAY}" ;;
+    apk) echo "${BASE_VERSION}_p${TODAY}" ;;
     *)
-        echo "error: unknown format '$FORMAT' (expected 'deb' or 'rpm')" >&2
+        echo "error: unknown format '$FORMAT' (expected 'deb', 'rpm', or 'apk')" >&2
         exit 1
         ;;
 esac

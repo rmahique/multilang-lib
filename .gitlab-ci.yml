@@ -15,11 +15,11 @@
 #   package      — one job per language x distro documented in each
 #                  <language>/packaging/README.md (Debian bookworm,
 #                  Fedora latest, openSUSE Leap 15, openSUSE Tumbleweed,
-#                  SLES 16 -- 25 jobs total), building that distro's
-#                  native package on every push/MR (not gated, unlike
-#                  conformance) so a downloadable package always exists
-#                  for the current commit. Each job's `image:` is its
-#                  disposable container, same reasoning as unit-test.
+#                  SLES 16, Alpine -- 30 jobs total), building that
+#                  distro's native package on every push/MR (not gated,
+#                  unlike conformance) so a downloadable package always
+#                  exists for the current commit. Each job's `image:` is
+#                  its disposable container, same reasoning as unit-test.
 #                  Version comes from scripts/compute-version.sh: the
 #                  exact tag when HEAD is a release, otherwise <latest
 #                  tag or that language's own manifest version>+<today's
@@ -29,9 +29,10 @@
 #                  steps differ enough per language+distro pair --
 #                  Python's openSUSE Leap 15 job needs an env var none of
 #                  the other jobs need, C needs several -devel packages
-#                  none of the other four languages need at all -- that a
-#                  matrix would need as much per-cell special-casing as
-#                  just listing them.
+#                  none of the other four languages need at all, Alpine's
+#                  jobs need a non-root build user + signing key setup no
+#                  .deb/.rpm job needs -- that a matrix would need as much
+#                  per-cell special-casing as just listing them.
 #
 #   conformance  — one job per language, each with its own isolated
 #                  Docker-in-Docker service, calling the existing
@@ -215,6 +216,28 @@ package-python-sles16:
       - python/dist-packages/
     expire_in: 30 days
 
+package-python-alpine:
+  stage: package
+  image: alpine:3.20
+  before_script:
+    # abuild refuses to run its build/package steps as root -- see
+    # python/packaging/README.md's "Alpine" section, same non-root
+    # builder + ephemeral signing key setup as packaging/docker/Dockerfile.alpine.
+    - apk add --no-cache alpine-sdk sudo python3 python3-dev py3-setuptools py3-build py3-installer py3-wheel py3-pytest tar git
+    - adduser -D builder
+    - addgroup builder abuild
+    - echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+    - su builder -c 'abuild-keygen -a -i -n'
+    - cd python
+  script:
+    - packaging/build-apk.sh
+    - mkdir -p dist-packages
+    - find /home/builder/packages \( -name "*.apk" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - python/dist-packages/
+    expire_in: 30 days
+
 package-go-debian:
   stage: package
   image: debian:bookworm
@@ -284,6 +307,25 @@ package-go-sles16:
     - packaging/build-rpm.sh
     - mkdir -p dist-packages
     - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - go/dist-packages/
+    expire_in: 30 days
+
+package-go-alpine:
+  stage: package
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache alpine-sdk sudo tar git
+    - adduser -D builder
+    - addgroup builder abuild
+    - echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+    - su builder -c 'abuild-keygen -a -i -n'
+    - cd go
+  script:
+    - packaging/build-apk.sh
+    - mkdir -p dist-packages
+    - find /home/builder/packages \( -name "*.apk" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
   artifacts:
     paths:
       - go/dist-packages/
@@ -363,6 +405,25 @@ package-javascript-sles16:
       - javascript/dist-packages/
     expire_in: 30 days
 
+package-javascript-alpine:
+  stage: package
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache alpine-sdk sudo tar git
+    - adduser -D builder
+    - addgroup builder abuild
+    - echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+    - su builder -c 'abuild-keygen -a -i -n'
+    - cd javascript
+  script:
+    - packaging/build-apk.sh
+    - mkdir -p dist-packages
+    - find /home/builder/packages \( -name "*.apk" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - javascript/dist-packages/
+    expire_in: 30 days
+
 package-php-debian:
   stage: package
   image: debian:bookworm
@@ -437,6 +498,25 @@ package-php-sles16:
       - php/dist-packages/
     expire_in: 30 days
 
+package-php-alpine:
+  stage: package
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache alpine-sdk sudo tar git
+    - adduser -D builder
+    - addgroup builder abuild
+    - echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+    - su builder -c 'abuild-keygen -a -i -n'
+    - cd php
+  script:
+    - packaging/build-apk.sh
+    - mkdir -p dist-packages
+    - find /home/builder/packages \( -name "*.apk" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - php/dist-packages/
+    expire_in: 30 days
+
 package-c-debian:
   stage: package
   image: debian:bookworm
@@ -506,6 +586,25 @@ package-c-sles16:
     - packaging/build-rpm.sh
     - mkdir -p dist-packages
     - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - c/dist-packages/
+    expire_in: 30 days
+
+package-c-alpine:
+  stage: package
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache alpine-sdk sudo pkgconf sqlite-dev postgresql-dev openssl-dev mariadb-connector-c-dev tar git
+    - adduser -D builder
+    - addgroup builder abuild
+    - echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+    - su builder -c 'abuild-keygen -a -i -n'
+    - cd c
+  script:
+    - packaging/build-apk.sh
+    - mkdir -p dist-packages
+    - find /home/builder/packages \( -name "*.apk" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
   artifacts:
     paths:
       - c/dist-packages/

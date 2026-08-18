@@ -54,6 +54,21 @@ This project isn't tagged/released anywhere yet — all five ports are at
   `%if 0%{?suse_version}` branches already cover it, and it follows the
   same no-`MULTILANG_LEAP15_PYTHON_WORKAROUND` path as openSUSE
   Tumbleweed, since SLES 16 ships a current default `python3` (3.13).
+- Alpine Linux packaging (`.apk`, via `abuild`) for all five ports —
+  30 CI jobs total, up from 25. A new mechanism, not just a new distro on
+  an existing one: each port gets a `packaging/apk/APKBUILD` and
+  `packaging/build-apk.sh` alongside the existing `debian/`/`rpm/` files.
+  `scripts/compute-version.sh` gained an `apk` format (`<base>_p<date>`
+  for unreleased builds, using Alpine's own "post-release" version-suffix
+  semantics in place of deb's `+`/rpm's `^`). Since `abuild` refuses to
+  run its build/package steps as root, `docker/Dockerfile.alpine` creates
+  a non-root `builder` user with an ephemeral, CI-only signing key
+  (`abuild-keygen -a -i -n`), and `build-apk.sh` stages the source as
+  root before `su builder -c 'abuild -r'`. C's runtime/headers split
+  (`libmultilang` + `libmultilang-dev`) uses abuild's built-in
+  `default_dev()` subpackage splitter rather than a hand-written file
+  list. See each port's `packaging/README.md` Alpine section for the
+  full rationale.
 - `website/` — a usage-examples site (MkDocs + Material) covering all
   five ports, deployed to GitHub Pages by
   `.github/workflows/pages.yml` on every push to main that touches

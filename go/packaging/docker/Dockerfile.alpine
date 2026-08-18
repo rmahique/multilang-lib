@@ -1,0 +1,17 @@
+# Packaging build image for go-alpine. Bakes in every dependency
+# packaging/build-apk.sh needs, on the same distro the package targets --
+# generated from (and must be kept in sync with) the combo definition in
+# ../../../.github/workflows/build-packages.yml.
+#
+# See python/packaging/README.md's "Alpine" section for why this
+# Dockerfile creates a `builder` user and an ephemeral signing key
+# instead of just `apk add`-ing and building directly as root, the way
+# every other Dockerfile in this repo does -- abuild itself refuses to
+# run its build/package steps as root.
+FROM alpine:3.20
+
+RUN apk add --no-cache alpine-sdk sudo tar git && \
+    adduser -D builder && \
+    addgroup builder abuild && \
+    echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder && \
+    su builder -c 'abuild-keygen -a -i -n'

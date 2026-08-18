@@ -37,6 +37,7 @@ in CI — same image, same commands, locally or in CI).
 | openSUSE Leap 15 | `build-rpm.sh` | same spec — no distro branching needed | `docker/Dockerfile.opensuse-leap-15` |
 | openSUSE Tumbleweed | `build-rpm.sh` | same spec | `docker/Dockerfile.opensuse-tumbleweed` |
 | SLES 16 | `build-rpm.sh` | same spec | `docker/Dockerfile.sles-16` |
+| Alpine | `build-apk.sh` | `apk/APKBUILD` (a completely different format/toolchain, `abuild` -- see python/packaging/README.md's Alpine section for the two things worth knowing) | `docker/Dockerfile.alpine` |
 
 ## Debian / Ubuntu
 
@@ -86,11 +87,37 @@ explicitly a *subset* of full SLES's package set, so this is a
 best-effort guess like the Fedora/openSUSE names above, not a guarantee;
 if one of these isn't in `SLE_BCI`, only this Dockerfile needs updating.
 
+## Alpine
+
+```bash
+docker build -t multilang-c-alpine -f packaging/docker/Dockerfile.alpine packaging/docker
+docker run --rm -v "$(pwd)/..":/workspace -w /workspace/c multilang-c-alpine packaging/build-apk.sh
+```
+
+See `python/packaging/README.md`'s Alpine section for why this build is
+structurally different from the `.deb`/`.rpm` ones above (non-root
+`builder` user + ephemeral signing key, `pkgver` read from an env var
+instead of a command-line override). The runtime/headers split
+(`libmultilang` + `libmultilang-dev`) isn't hand-written the way the
+Debian `.install` files and RPM spec's `%files`/`%files devel` are:
+`apk/APKBUILD` sets `subpackages="$pkgname-dev"` with no explicit
+splitter function, which invokes abuild's own built-in `default_dev()` --
+it automatically moves `usr/include` and unversioned `usr/lib/*.so`
+symlinks into `-dev` while leaving the versioned `usr/lib/*.so.0*` files
+in the runtime package, relying on exactly the layout
+`../../Makefile`'s `install-runtime`/`install-devel` targets already
+produce. The `sqlite-dev`/`postgresql-dev`/`openssl-dev`/
+`mariadb-connector-c-dev` package names baked into
+`docker/Dockerfile.alpine` are this project's own best-effort guess, same
+caveat as the Fedora/openSUSE names above.
+
 ## Before a real release
 
 Same as `python/packaging/README.md`: use `mock`/`sbuild`/`pbuilder` and
 this project's normal OBS/COPR/PPA signing flow rather than `rpmbuild`/
-`dpkg-buildpackage` directly. Also note the built libraries install to
+`dpkg-buildpackage` directly. The Alpine build's signing key is ephemeral
+(see `docker/Dockerfile.alpine`) — fine for a CI artifact, not for a real
+distributed repo. Also note the built libraries install to
 plain `/usr/lib` (`%{_libdir}` on RPM, so `/usr/lib64` where that's the
 distro norm) rather than a Debian multiarch-triplet path
 (`/usr/lib/x86_64-linux-gnu/`) -- fine for a single-arch CI build, but a

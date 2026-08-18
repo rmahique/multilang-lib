@@ -25,6 +25,7 @@ in CI — same image, same commands, locally or in CI).
 | openSUSE Leap 15 | `build-rpm.sh` | same spec — no distro branching needed | `docker/Dockerfile.opensuse-leap-15` |
 | openSUSE Tumbleweed | `build-rpm.sh` | same spec | `docker/Dockerfile.opensuse-tumbleweed` |
 | SLES 16 | `build-rpm.sh` | same spec | `docker/Dockerfile.sles-16` |
+| Alpine | `build-apk.sh` | `apk/APKBUILD` (a completely different format/toolchain, `abuild` -- see python/packaging/README.md's Alpine section for the two things worth knowing) | `docker/Dockerfile.alpine` |
 
 ## Debian / Ubuntu
 
@@ -62,8 +63,25 @@ registry.suse.com/bci/bci-base:16.0` — SUSE's free, anonymously-pullable
 image for SLE 16, pre-configured with the `SLE_BCI` repo so `zypper
 install` works without an SCC registration/subscription.
 
+## Alpine
+
+```bash
+docker build -t multilang-js-alpine -f packaging/docker/Dockerfile.alpine packaging/docker
+docker run --rm -v "$(pwd)/..":/workspace -w /workspace/javascript multilang-js-alpine packaging/build-apk.sh
+```
+
+See `python/packaging/README.md`'s Alpine section for why this build is
+structurally different from the `.deb`/`.rpm` ones above (non-root
+`builder` user + ephemeral signing key, `pkgver` read from an env var
+instead of a command-line override). Ships as source under
+`/usr/lib/node_modules/multilang/`, same as the Debian/RPM packages,
+declaring no depends on the database driver packages for the same reason
+those two give.
+
 ## Before a real release
 
 Same as `python/packaging/README.md`: use `mock`/`sbuild`/`pbuilder` and this
 project's normal OBS/COPR/PPA signing flow rather than `rpmbuild`/
-`dpkg-buildpackage` directly.
+`dpkg-buildpackage` directly. The Alpine build's signing key is ephemeral
+(see `docker/Dockerfile.alpine`) — fine for a CI artifact, not for a real
+distributed repo.

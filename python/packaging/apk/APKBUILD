@@ -1,0 +1,55 @@
+# Contributor: Raúl Mahiques <claude.ia@raulmahiques.com>
+# Maintainer: Raúl Mahiques <claude.ia@raulmahiques.com>
+pkgname=py3-multilang
+# build-apk.sh exports MULTILANG_VERSION (packaging/../scripts/
+# compute-version.sh's output) before invoking abuild; 0.1.0 here is only
+# a fallback for anyone invoking abuild directly against this APKBUILD.
+pkgver=${MULTILANG_VERSION:-0.1.0}
+pkgrel=0
+pkgdesc="Reusable multi-language string storage library"
+url="https://github.com/rmahique/multilang-lib"
+arch="noarch"
+license="GPL-3.0-or-later"
+depends="python3"
+makedepends="py3-setuptools py3-build py3-installer py3-wheel py3-pytest"
+checkdepends="py3-pytest"
+subpackages="$pkgname-postgres:_postgres $pkgname-mysql:_mysql"
+# No source= URL: build-apk.sh stages this package's actual source tree
+# (multilang/, tests/, pyproject.toml, README.md, LICENSE) into this same
+# directory before invoking abuild, exactly the way build-rpm.sh's tarball
+# staging feeds rpmbuild -- so builddir is just "where this APKBUILD
+# already lives", not something abuild needs to fetch or extract.
+source=""
+builddir="$startdir"
+options="!fetch"
+
+build() {
+	python3 -m build --wheel --no-isolation
+}
+
+check() {
+	# test_conformance.py reaches outside this package to a sibling
+	# conformance/cases.json that isn't staged alongside this APKBUILD
+	# (see ../../c/packaging/apk/APKBUILD and ../../debian/rules for the
+	# same reasoning) -- packaging only needs to confirm this package
+	# installs and its own unit/validation logic works.
+	PYTHONPATH=. python3 -m pytest tests/ -v --ignore=tests/test_conformance.py
+}
+
+package() {
+	python3 -m installer --destdir="$pkgdir" dist/*.whl
+	install -Dm644 LICENSE "$pkgdir"/usr/share/licenses/$pkgname/LICENSE
+	install -Dm644 README.md "$pkgdir"/usr/share/doc/$pkgname/README.md
+}
+
+_postgres() {
+	pkgdesc="PostgreSQL backend support for py3-multilang"
+	depends="$pkgname=$pkgver-r$pkgrel py3-psycopg2"
+	mkdir -p "$subpkgdir"
+}
+
+_mysql() {
+	pkgdesc="MySQL/MariaDB backend support for py3-multilang"
+	depends="$pkgname=$pkgver-r$pkgrel py3-pymysql"
+	mkdir -p "$subpkgdir"
+}
