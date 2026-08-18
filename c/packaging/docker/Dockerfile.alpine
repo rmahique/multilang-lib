@@ -14,7 +14,12 @@
 # updating.
 FROM alpine:3.20
 
-RUN apk add --no-cache alpine-sdk sudo pkgconf sqlite-dev postgresql-dev openssl-dev mariadb-connector-c-dev tar git && \
+# bash: Alpine's default shell is busybox ash, not bash -- both
+# build-packages.yml's `docker run ... bash -c '...'` step and
+# build-apk.sh's own `#!/usr/bin/env bash` shebang need a real bash on
+# PATH, unlike every other (Debian/Fedora/openSUSE/SLES) Dockerfile in
+# this repo where bash is already the default shell.
+RUN apk add --no-cache alpine-sdk sudo bash pkgconf sqlite-dev postgresql-dev openssl-dev mariadb-connector-c-dev tar git && \
     adduser -D builder && \
     addgroup builder abuild && \
     echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder && \

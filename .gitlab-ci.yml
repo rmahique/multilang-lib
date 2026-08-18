@@ -223,7 +223,7 @@ package-python-alpine:
     # abuild refuses to run its build/package steps as root -- see
     # python/packaging/README.md's "Alpine" section, same non-root
     # builder + ephemeral signing key setup as packaging/docker/Dockerfile.alpine.
-    - apk add --no-cache alpine-sdk sudo python3 python3-dev py3-setuptools py3-build py3-installer py3-wheel py3-pytest tar git
+    - apk add --no-cache alpine-sdk sudo bash python3 python3-dev py3-setuptools py3-build py3-installer py3-wheel py3-pytest tar git
     - adduser -D builder
     - addgroup builder abuild
     - echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
@@ -316,7 +316,7 @@ package-go-alpine:
   stage: package
   image: alpine:3.20
   before_script:
-    - apk add --no-cache alpine-sdk sudo tar git
+    - apk add --no-cache alpine-sdk sudo bash tar git
     - adduser -D builder
     - addgroup builder abuild
     - echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
@@ -409,7 +409,7 @@ package-javascript-alpine:
   stage: package
   image: alpine:3.20
   before_script:
-    - apk add --no-cache alpine-sdk sudo tar git
+    - apk add --no-cache alpine-sdk sudo bash tar git
     - adduser -D builder
     - addgroup builder abuild
     - echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
@@ -502,7 +502,7 @@ package-php-alpine:
   stage: package
   image: alpine:3.20
   before_script:
-    - apk add --no-cache alpine-sdk sudo tar git
+    - apk add --no-cache alpine-sdk sudo bash tar git
     - adduser -D builder
     - addgroup builder abuild
     - echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
@@ -595,7 +595,7 @@ package-c-alpine:
   stage: package
   image: alpine:3.20
   before_script:
-    - apk add --no-cache alpine-sdk sudo pkgconf sqlite-dev postgresql-dev openssl-dev mariadb-connector-c-dev tar git
+    - apk add --no-cache alpine-sdk sudo bash pkgconf sqlite-dev postgresql-dev openssl-dev mariadb-connector-c-dev tar git
     - adduser -D builder
     - addgroup builder abuild
     - echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
