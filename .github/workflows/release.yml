@@ -1,6 +1,6 @@
 # Triggered by pushing a version tag (1.2.3, 1.0rc1, 1.0beta -- this
 # repo's own tags have no "v" prefix, unlike the common v1.2.3 GitHub
-# convention). Builds the same 20
+# convention). Builds the same 25
 # language x distro packages ci.yml builds on every push (via the shared
 # build-packages.yml reusable workflow, so the matrix can't drift between
 # the two), then attaches every .deb/.rpm/.sha512 to a GitHub Release for
@@ -11,10 +11,10 @@
 #
 # Filenames are prefixed with their combo name (e.g.
 # python-fedora-latest-<pkg>.rpm) before upload: rpmbuild's %{?dist} tag
-# is empty on openSUSE (it's a Fedora-only macro by default), so without
-# this prefix the Leap 15 and Tumbleweed RPMs for the same language would
-# have identical filenames and silently overwrite each other when
-# flattened into one release's asset list.
+# is empty on openSUSE/SLES (it's a Fedora-only macro by default), so
+# without this prefix the Leap 15, Tumbleweed, and SLES 16 RPMs for the
+# same language would have identical filenames and silently overwrite
+# each other when flattened into one release's asset list.
 
 name: Release
 

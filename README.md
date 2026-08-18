@@ -81,10 +81,10 @@ cd conformance && ./run-live-db-tests.sh
 
 ## Downloads
 
-Every push and PR builds a native `.deb`/`.rpm` for all 5 ports across 4
+Every push and PR builds a native `.deb`/`.rpm` for all 5 ports across 5
 distros (Debian bookworm, Fedora latest, openSUSE Leap 15, openSUSE
-Tumbleweed) — see each port's own `packaging/README.md` for what's
-shipped and how to build one yourself. For a stable download link
+Tumbleweed, SLES 16) — see each port's own `packaging/README.md` for
+what's shipped and how to build one yourself. For a stable download link
 instead of a workflow-run artifact:
 
 **[Latest GitHub Release](https://github.com/rmahique/multilang-lib/releases/latest)**
@@ -92,7 +92,7 @@ instead of a workflow-run artifact:
 version tag (e.g. `1.0`, `1.0rc1`) is pushed (see
 [`.github/workflows/release.yml`](.github/workflows/release.yml)).
 Filenames are prefixed with their language and distro, e.g.
-`python-fedora-latest-python3-multilang-0.2.0-1.fc40.noarch.rpm`.
+`python-fedora-latest-python3-multilang-0.1.0.20260815-1.fc44.noarch.rpm`.
 
 No tagged release yet, or want a package for the exact commit you're
 looking at? Every push/PR also uploads the same packages as [workflow

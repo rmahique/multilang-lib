@@ -22,8 +22,9 @@ in CI — same image, same commands, locally or in CI).
 |---|---|---|---|
 | Debian, Ubuntu | `build-deb.sh` | `debian/` | `docker/Dockerfile.debian-bookworm` |
 | RHEL, CentOS Stream, Fedora | `build-rpm.sh` | `rpm/nodejs-multilang.spec` | `docker/Dockerfile.fedora-latest` |
-| openSUSE Leap, SLES | `build-rpm.sh` | same spec — no distro branching needed | `docker/Dockerfile.opensuse-leap-15` |
+| openSUSE Leap 15 | `build-rpm.sh` | same spec — no distro branching needed | `docker/Dockerfile.opensuse-leap-15` |
 | openSUSE Tumbleweed | `build-rpm.sh` | same spec | `docker/Dockerfile.opensuse-tumbleweed` |
+| SLES 16 | `build-rpm.sh` | same spec | `docker/Dockerfile.sles-16` |
 
 ## Debian / Ubuntu
 
@@ -48,6 +49,18 @@ docker run --rm -v "$(pwd)/..":/workspace -w /workspace/javascript multilang-js-
 
 (swap the Dockerfile for `Dockerfile.opensuse-leap-15` — the spec is
 identical either way).
+
+## SLES 16
+
+```bash
+docker build -t multilang-js-sles -f packaging/docker/Dockerfile.sles-16 packaging/docker
+docker run --rm -v "$(pwd)/..":/workspace -w /workspace/javascript multilang-js-sles packaging/build-rpm.sh
+```
+
+Same spec, no distro branching. `docker/Dockerfile.sles-16` is `FROM
+registry.suse.com/bci/bci-base:16.0` — SUSE's free, anonymously-pullable
+image for SLE 16, pre-configured with the `SLE_BCI` repo so `zypper
+install` works without an SCC registration/subscription.
 
 ## Before a real release
 

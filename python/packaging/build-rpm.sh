@@ -50,12 +50,13 @@ cp packaging/rpm/multilang.spec "${RPMBUILD_ROOT}/SPECS/"
 # compute-version.sh's output instead of always building 0.1.0-1.
 #
 # MULTILANG_LEAP15_PYTHON_WORKAROUND=1 (set by the openSUSE Leap 15 CI job
-# only, not by Tumbleweed or anyone else): both SUSE flavors share the
-# spec's pip-wheel build mechanism, but only Leap 15's default python3 is
-# too old (3.6) to use directly -- Tumbleweed's default python3 is already
-# current, same as Fedora's. The spec picks python310 vs plain python3
-# based on this one flag instead of guessing from %suse_version ranges,
-# which shift release to release and aren't worth hardcoding.
+# only, not by Tumbleweed, SLES 16, or anyone else): all three SUSE
+# flavors share the spec's pip-wheel build mechanism, but only Leap 15's
+# default python3 is too old (3.6) to use directly -- Tumbleweed's and
+# SLES 16's default python3 are already current, same as Fedora's. The
+# spec picks python310 vs plain python3 based on this one flag instead of
+# guessing from %suse_version ranges, which shift release to release and
+# aren't worth hardcoding.
 EXTRA_DEFINES=()
 if [ "${MULTILANG_LEAP15_PYTHON_WORKAROUND:-0}" = "1" ]; then
     EXTRA_DEFINES+=(--define "leap15_python_workaround 1")

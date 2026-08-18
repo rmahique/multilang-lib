@@ -1,7 +1,7 @@
 # Reusable workflow: builds every language port's native package for
 # every distro documented in <language>/packaging/README.md (Debian
-# bookworm, Fedora latest, openSUSE Leap 15, openSUSE Tumbleweed -- 20
-# combinations), and uploads each as a build artifact named
+# bookworm, Fedora latest, openSUSE Leap 15, openSUSE Tumbleweed, SLES
+# 16 -- 25 combinations), and uploads each as a build artifact named
 # multilang-<combo.name>. Version comes from scripts/compute-version.sh:
 # the exact tag when HEAD is a release, otherwise <latest tag or that
 # language's own manifest version> plus today's date. Each package gets
@@ -17,7 +17,7 @@
 #   - release.yml — on a version tag, so the same packages get attached
 #                  to the GitHub Release.
 #
-# 5 languages x 4 distros = 20 explicit combinations rather than two
+# 5 languages x 5 distros = 25 explicit combinations rather than two
 # independent matrix axes: dependencies differ enough per language+distro
 # pair (Python's openSUSE Leap 15 job needs the leap15_python_workaround
 # env var that no other job needs; C needs -devel packages none of the
@@ -77,6 +77,11 @@ jobs:
             distro: opensuse-tumbleweed
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: python-sles-16
+            language: python
+            distro: sles-16
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
 
           # --- Go (source-only) ---
           - name: go-debian-bookworm
@@ -97,6 +102,11 @@ jobs:
           - name: go-opensuse-tumbleweed
             language: go
             distro: opensuse-tumbleweed
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: go-sles-16
+            language: go
+            distro: sles-16
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
 
@@ -121,6 +131,11 @@ jobs:
             distro: opensuse-tumbleweed
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: javascript-sles-16
+            language: javascript
+            distro: sles-16
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
 
           # --- PHP (source-only, wraps the Composer package) ---
           - name: php-debian-bookworm
@@ -143,6 +158,11 @@ jobs:
             distro: opensuse-tumbleweed
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: php-sles-16
+            language: php
+            distro: sles-16
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
 
           # --- C/C++ (real compiled shared-library + headers split) ---
           - name: c-debian-bookworm
@@ -163,6 +183,11 @@ jobs:
           - name: c-opensuse-tumbleweed
             language: c
             distro: opensuse-tumbleweed
+            build: packaging/build-rpm.sh
+            collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
+          - name: c-sles-16
+            language: c
+            distro: sles-16
             build: packaging/build-rpm.sh
             collect: find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name "*.rpm" -o -name "*.sha512" | xargs -I{} cp {} dist-packages/
     steps:

@@ -18,26 +18,27 @@ Source0:        %{srcname}-%{version}.tar.gz
 BuildArch:      noarch
 
 %if 0%{?suse_version}
-# Both openSUSE Leap 15 and openSUSE Tumbleweed set %%suse_version, and
-# both build via this same pip-wheel mechanism (self-contained, doesn't
-# depend on Fedora's pyproject-rpm-macros package being available on
-# SUSE). They differ only in which python3 is usable directly:
+# openSUSE Leap 15, openSUSE Tumbleweed, and SLES 16 all set
+# %%suse_version, and all three build via this same pip-wheel mechanism
+# (self-contained, doesn't depend on Fedora's pyproject-rpm-macros
+# package being available on SUSE). They differ only in which python3 is
+# usable directly:
 #
 #   - Leap 15's default python3 is 3.6, too old for this project's
 #     requires-python >=3.9 -- build-rpm.sh passes
 #     --define "leap15_python_workaround 1" for that job only, which
 #     selects the versioned python310 package here.
-#   - Tumbleweed (rolling release) already ships a current default
-#     python3, so it uses that directly, same as Fedora/RHEL would if
-#     they took this branch.
+#   - Tumbleweed (rolling release) and SLES 16 already ship a current
+#     default python3 (3.13 on SLES 16), so both use that directly, same
+#     as Fedora/RHEL would if they took this branch.
 #
 # Neither python310-pip nor python310-pytest exist in Leap 15's repos, so
 # %%check below skips gracefully rather than depending on pip succeeding
 # at build time -- real RPM build farms (mock/OBS) run without network
 # access, so a pip install inside %%check wouldn't be reliable there even
-# if it works in an ad-hoc container with internet. Tumbleweed's default
-# python3-pip/python3-pytest are expected to be installable, so %%check
-# runs for real there.
+# if it works in an ad-hoc container with internet. Tumbleweed's and
+# SLES 16's default python3-pip/python3-pytest are expected to be
+# installable, so %%check runs for real there.
 %if 0%{?leap15_python_workaround}
 %global suse_python python3.10
 %global suse_python_pkg python310

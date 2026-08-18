@@ -14,22 +14,22 @@
 #
 #   package      — one job per language x distro documented in each
 #                  <language>/packaging/README.md (Debian bookworm,
-#                  Fedora latest, openSUSE Leap 15, openSUSE Tumbleweed --
-#                  20 jobs total), building that distro's native package
-#                  on every push/MR (not gated, unlike conformance) so a
-#                  downloadable package always exists for the current
-#                  commit. Each job's `image:` is its disposable
-#                  container, same reasoning as unit-test. Version comes
-#                  from scripts/compute-version.sh: the exact tag when
-#                  HEAD is a release, otherwise <latest tag or that
-#                  language's own manifest version>+<today's date>.
-#                  Every package gets a matching .sha512 file, uploaded
-#                  together as a job artifact. Explicit per-job (not a
-#                  GitLab `parallel:matrix:`) because install steps
-#                  differ enough per language+distro pair -- Python's
-#                  openSUSE Leap 15 job needs an env var none of the
-#                  other 19 need, C needs several -devel packages none
-#                  of the other four languages need at all -- that a
+#                  Fedora latest, openSUSE Leap 15, openSUSE Tumbleweed,
+#                  SLES 16 -- 25 jobs total), building that distro's
+#                  native package on every push/MR (not gated, unlike
+#                  conformance) so a downloadable package always exists
+#                  for the current commit. Each job's `image:` is its
+#                  disposable container, same reasoning as unit-test.
+#                  Version comes from scripts/compute-version.sh: the
+#                  exact tag when HEAD is a release, otherwise <latest
+#                  tag or that language's own manifest version>+<today's
+#                  date>. Every package gets a matching .sha512 file,
+#                  uploaded together as a job artifact. Explicit per-job
+#                  (not a GitLab `parallel:matrix:`) because install
+#                  steps differ enough per language+distro pair --
+#                  Python's openSUSE Leap 15 job needs an env var none of
+#                  the other jobs need, C needs several -devel packages
+#                  none of the other four languages need at all -- that a
 #                  matrix would need as much per-cell special-casing as
 #                  just listing them.
 #
@@ -200,6 +200,21 @@ package-python-opensuse-tumbleweed:
       - python/dist-packages/
     expire_in: 30 days
 
+package-python-sles16:
+  stage: package
+  image: registry.suse.com/bci/bci-base:16.0
+  before_script:
+    - zypper --non-interactive install rpm-build python3 python3-devel python3-setuptools python3-pip python3-pytest git
+    - cd python
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - python/dist-packages/
+    expire_in: 30 days
+
 package-go-debian:
   stage: package
   image: debian:bookworm
@@ -247,6 +262,21 @@ package-go-opensuse-leap:
 package-go-opensuse-tumbleweed:
   stage: package
   image: opensuse/tumbleweed
+  before_script:
+    - zypper --non-interactive install rpm-build git
+    - cd go
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - go/dist-packages/
+    expire_in: 30 days
+
+package-go-sles16:
+  stage: package
+  image: registry.suse.com/bci/bci-base:16.0
   before_script:
     - zypper --non-interactive install rpm-build git
     - cd go
@@ -318,6 +348,21 @@ package-javascript-opensuse-tumbleweed:
       - javascript/dist-packages/
     expire_in: 30 days
 
+package-javascript-sles16:
+  stage: package
+  image: registry.suse.com/bci/bci-base:16.0
+  before_script:
+    - zypper --non-interactive install rpm-build git
+    - cd javascript
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - javascript/dist-packages/
+    expire_in: 30 days
+
 package-php-debian:
   stage: package
   image: debian:bookworm
@@ -377,6 +422,21 @@ package-php-opensuse-tumbleweed:
       - php/dist-packages/
     expire_in: 30 days
 
+package-php-sles16:
+  stage: package
+  image: registry.suse.com/bci/bci-base:16.0
+  before_script:
+    - zypper --non-interactive install rpm-build git
+    - cd php
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - php/dist-packages/
+    expire_in: 30 days
+
 package-c-debian:
   stage: package
   image: debian:bookworm
@@ -424,6 +484,21 @@ package-c-opensuse-leap:
 package-c-opensuse-tumbleweed:
   stage: package
   image: opensuse/tumbleweed
+  before_script:
+    - zypper --non-interactive install rpm-build gcc gcc-c++ make pkg-config sqlite3-devel postgresql-devel libopenssl-devel libmariadb-devel git
+    - cd c
+  script:
+    - packaging/build-rpm.sh
+    - mkdir -p dist-packages
+    - find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" \( -name "*.rpm" -o -name "*.sha512" \) -exec cp {} dist-packages/ \;
+  artifacts:
+    paths:
+      - c/dist-packages/
+    expire_in: 30 days
+
+package-c-sles16:
+  stage: package
+  image: registry.suse.com/bci/bci-base:16.0
   before_script:
     - zypper --non-interactive install rpm-build gcc gcc-c++ make pkg-config sqlite3-devel postgresql-devel libopenssl-devel libmariadb-devel git
     - cd c

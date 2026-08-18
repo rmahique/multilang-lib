@@ -34,8 +34,9 @@ in CI — same image, same commands, locally or in CI).
 |---|---|---|---|
 | Debian, Ubuntu | `build-deb.sh` | `debian/` | `docker/Dockerfile.debian-bookworm` |
 | RHEL, CentOS Stream, Fedora | `build-rpm.sh` | `rpm/multilang.spec` | `docker/Dockerfile.fedora-latest` |
-| openSUSE Leap, SLES | `build-rpm.sh` | same spec — no distro branching needed | `docker/Dockerfile.opensuse-leap-15` |
+| openSUSE Leap 15 | `build-rpm.sh` | same spec — no distro branching needed | `docker/Dockerfile.opensuse-leap-15` |
 | openSUSE Tumbleweed | `build-rpm.sh` | same spec | `docker/Dockerfile.opensuse-tumbleweed` |
+| SLES 16 | `build-rpm.sh` | same spec | `docker/Dockerfile.sles-16` |
 
 ## Debian / Ubuntu
 
@@ -67,6 +68,23 @@ The Fedora/openSUSE package names baked into each Dockerfile
 best-effort guess for the *install step*, not something the spec itself
 depends on getting right (see the dependency-names note above) -- if a
 distro's package name has moved, only that Dockerfile needs updating.
+
+## SLES 16
+
+```bash
+docker build -t multilang-c-sles -f packaging/docker/Dockerfile.sles-16 packaging/docker
+docker run --rm -v "$(pwd)/..":/workspace -w /workspace/c multilang-c-sles packaging/build-rpm.sh
+```
+
+Same spec, no distro branching. `docker/Dockerfile.sles-16` is `FROM
+registry.suse.com/bci/bci-base:16.0` — SUSE's free, anonymously-pullable
+image for SLE 16, pre-configured with the `SLE_BCI` repo so `zypper
+install` works without an SCC registration/subscription. It uses the
+same `-devel` package names as the openSUSE Dockerfiles above, since
+SLES and openSUSE share package-naming conventions — but `SLE_BCI` is
+explicitly a *subset* of full SLES's package set, so this is a
+best-effort guess like the Fedora/openSUSE names above, not a guarantee;
+if one of these isn't in `SLE_BCI`, only this Dockerfile needs updating.
 
 ## Before a real release
 

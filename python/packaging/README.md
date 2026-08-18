@@ -12,8 +12,9 @@ image, same commands, locally or in CI).
 |---|---|---|---|
 | Debian, Ubuntu | `build-deb.sh` | `debian/` | `docker/Dockerfile.debian-bookworm` |
 | RHEL, CentOS Stream, Fedora | `build-rpm.sh` | `rpm/multilang.spec` | `docker/Dockerfile.fedora-latest` |
-| openSUSE Leap, SLES | `build-rpm.sh` | `rpm/multilang.spec` (same spec, `%if 0%{?suse_version}` branches handle the differences; set `MULTILANG_LEAP15_PYTHON_WORKAROUND=1` to build against the versioned `python310` package) | `docker/Dockerfile.opensuse-leap-15` |
+| openSUSE Leap 15 | `build-rpm.sh` | `rpm/multilang.spec` (same spec, `%if 0%{?suse_version}` branches handle the differences; set `MULTILANG_LEAP15_PYTHON_WORKAROUND=1` to build against the versioned `python310` package) | `docker/Dockerfile.opensuse-leap-15` |
 | openSUSE Tumbleweed | `build-rpm.sh` | `rpm/multilang.spec` (same spec/mechanism as Leap, but builds against the distro's current default `python3` -- do **not** set `MULTILANG_LEAP15_PYTHON_WORKAROUND`) | `docker/Dockerfile.opensuse-tumbleweed` |
+| SLES 16 | `build-rpm.sh` | `rpm/multilang.spec` (same spec/mechanism as Tumbleweed -- SLES 16's default `python3` is already current, so do **not** set `MULTILANG_LEAP15_PYTHON_WORKAROUND` here either) | `docker/Dockerfile.sles-16` |
 
 ## Debian / Ubuntu
 
@@ -66,11 +67,27 @@ against that directly instead of a versioned `python310` package — do
 **not** set `MULTILANG_LEAP15_PYTHON_WORKAROUND` here. `%check` runs for
 real on Tumbleweed since `python3-pytest` is expected to be installable.
 
-Resulting RPMs (both SUSE flavors) land under `~/rpmbuild/RPMS/noarch/`
-*inside* the container, so `build-rpm.sh` alone (without copying them out
-before the container exits) isn't enough to get them onto the host — see
-how `build-packages.yml`'s `collect:` step chains a `find ... | xargs cp`
-into the same `docker run` invocation.
+Resulting RPMs (all three SUSE flavors) land under
+`~/rpmbuild/RPMS/noarch/` *inside* the container, so `build-rpm.sh` alone
+(without copying them out before the container exits) isn't enough to
+get them onto the host — see how `build-packages.yml`'s `collect:` step
+chains a `find ... | xargs cp` into the same `docker run` invocation.
+
+## SLES 16
+
+```bash
+docker build -t multilang-python-sles -f packaging/docker/Dockerfile.sles-16 packaging/docker
+docker run --rm -v "$(pwd)/..":/workspace -w /workspace/python multilang-python-sles packaging/build-rpm.sh
+```
+
+Same spec and pip-wheel build mechanism as Tumbleweed: SLES 16 ships a
+current default `python3` (3.13), so it builds against that directly —
+do **not** set `MULTILANG_LEAP15_PYTHON_WORKAROUND` here either.
+`docker/Dockerfile.sles-16` is `FROM registry.suse.com/bci/bci-base:16.0`
+— SUSE's free, anonymously-pullable image for SLE 16, pre-configured
+with the `SLE_BCI` repo so `zypper install` works without an SCC
+registration/subscription. `%check` runs for real (`python3-pytest` is
+expected to be installable from `SLE_BCI`, same as Tumbleweed).
 
 ## Before a real release
 

@@ -1,0 +1,15 @@
+# Packaging build image for go-sles-16. Bakes in every dependency
+# packaging/build-deb.sh / build-rpm.sh needs, on the same distro the
+# package targets -- generated from (and must be kept in sync with) the
+# combo definition in ../../../.github/workflows/build-packages.yml.
+#
+# registry.suse.com/bci/bci-base is SUSE's free, anonymously-pullable
+# Base Container Image for SLE 16 -- it ships zypper pre-configured with
+# the free SLE_BCI repo (a curated subset of SLES packages meant
+# specifically for building things in containers), so no
+# SCC registration/subscription is needed to zypper install below,
+# unlike a full SLES install.
+FROM registry.suse.com/bci/bci-base:16.0
+
+RUN zypper --non-interactive install rpm-build tar git && \
+    zypper clean --all

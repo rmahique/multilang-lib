@@ -45,6 +45,15 @@ This project isn't tagged/released anywhere yet — all five ports are at
   build dependency baked in, matching the existing
   `Dockerfile.conformance` pattern rather than installing packages at
   runtime into a bare image.
+- SLES 16 added as a fifth packaging distro (25 CI jobs total, up from
+  20) for all five ports, via `<port>/packaging/docker/Dockerfile.sles-16`
+  built `FROM registry.suse.com/bci/bci-base:16.0` — SUSE's free,
+  anonymously-pullable Base Container Image, pre-configured with the
+  `SLE_BCI` repo so `zypper install` needs no SCC registration/
+  subscription. No spec/control file changes needed: the existing
+  `%if 0%{?suse_version}` branches already cover it, and it follows the
+  same no-`MULTILANG_LEAP15_PYTHON_WORKAROUND` path as openSUSE
+  Tumbleweed, since SLES 16 ships a current default `python3` (3.13).
 - `website/` — a usage-examples site (MkDocs + Material) covering all
   five ports, deployed to GitHub Pages by
   `.github/workflows/pages.yml` on every push to main that touches
