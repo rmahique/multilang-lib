@@ -27,6 +27,16 @@ mkdir -p "$BUILD_ROOT"
 cp -r multilang tests pyproject.toml README.md LICENSE packaging/apk/APKBUILD "$BUILD_ROOT/"
 chown -R builder:abuild "$BUILD_ROOT"
 
+# Dockerfile.alpine installs its baked-in deps with `apk add --no-cache`,
+# which deliberately leaves no package index behind -- fine as long as
+# every depends=/makedepends= this APKBUILD declares happens to already
+# be installed, but `apk update` here makes that not a fragile
+# assumption: without a real index, `abuild -r`'s own dependency
+# resolution fails with "no such package" the moment anything isn't
+# already pre-baked into the image, even for a package that genuinely
+# exists in the repo.
+apk update
+
 # MULTILANG_VERSION: read by APKBUILD's pkgver=${MULTILANG_VERSION:-0.1.0}
 # -- abuild has no rpmbuild-style --define flag to override a variable
 # the spec/APKBUILD already assigns, so the APKBUILD itself falls back to

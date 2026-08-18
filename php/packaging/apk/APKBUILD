@@ -19,6 +19,13 @@ depends="php83 php83-pdo"
 # alongside this APKBUILD before invoking abuild.
 source=""
 builddir="$startdir"
+# abuild's default srcdir is "$startdir/src" -- which, unset, would be
+# the exact same path as this port's own src/ directory (staged directly
+# into $startdir by ../build-apk.sh). abuild wipes $srcdir clean right
+# before running package(), which would silently delete the real source
+# files out from under it. Pointed at an unused path instead -- safe
+# because source="" means abuild never needs to extract anything into it.
+srcdir="$startdir/.abuild-srcdir-unused"
 options="!fetch !check"
 
 package() {

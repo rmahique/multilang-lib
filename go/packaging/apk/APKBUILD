@@ -17,6 +17,12 @@ depends="go"
 # abuild, same staging approach as every other language's build-apk.sh.
 source=""
 builddir="$startdir"
+# Explicit, unused srcdir -- not load-bearing here the way it is for the
+# js/php/c APKBUILDs (this port stages no directory literally named
+# src/), but set for the same reason and consistency: abuild's default
+# srcdir ("$startdir/src") is wiped clean right before build/package, so
+# leaving it unset is one rename away from silently deleting real files.
+srcdir="$startdir/.abuild-srcdir-unused"
 options="!fetch !check"
 
 package() {

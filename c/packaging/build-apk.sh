@@ -26,6 +26,15 @@ mkdir -p "$BUILD_ROOT"
 cp -r Makefile src include README.md ../LICENSE packaging/apk/APKBUILD "$BUILD_ROOT/"
 chown -R builder:abuild "$BUILD_ROOT"
 
+# Dockerfile.alpine installs its baked-in deps with `apk add --no-cache`,
+# which deliberately leaves no package index behind -- fine for those
+# packages (already installed), but `abuild -r`'s own dependency
+# resolution needs a real index to search even to double check an
+# already-satisfied depends/makedepends, or it fails with "no such
+# package". `apk update` fetches that index once, before handing off to
+# `abuild`.
+apk update
+
 su builder -c "cd '$BUILD_ROOT' && export MULTILANG_VERSION='$VERSION' && abuild -r"
 
 find /home/builder/packages -name "*.apk" | while read -r pkg; do

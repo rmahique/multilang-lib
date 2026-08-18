@@ -19,6 +19,15 @@ mkdir -p "$BUILD_ROOT"
 cp -r ./*.go go.mod go.sum ../LICENSE packaging/apk/APKBUILD "$BUILD_ROOT/"
 chown -R builder:abuild "$BUILD_ROOT"
 
+# Dockerfile.alpine installs its baked-in deps with `apk add --no-cache`,
+# which deliberately leaves no package index behind -- fine for those
+# packages (already installed), but `abuild -r`'s own dependency
+# resolution (installing this APKBUILD's depends=/makedepends=, e.g. `go`
+# here) needs a real index to search, or it fails with "no such package"
+# even for a package that genuinely exists in the repo. `apk update`
+# fetches that index once, before handing off to `abuild`.
+apk update
+
 su builder -c "cd '$BUILD_ROOT' && export MULTILANG_VERSION='$VERSION' && abuild -r"
 
 find /home/builder/packages -name "*.apk" | while read -r pkg; do
