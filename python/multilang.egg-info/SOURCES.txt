@@ -12,9 +12,11 @@ multilang.egg-info/requires.txt
 multilang.egg-info/top_level.txt
 multilang/backends/__init__.py
 multilang/backends/base.py
+multilang/backends/filesystem_backend.py
 multilang/backends/mysql_backend.py
 multilang/backends/postgres_backend.py
 multilang/backends/sqlite_backend.py
+tests/test_backend_filesystem.py
 tests/test_conformance.py
 tests/test_strings.py
 tests/test_validation.py
